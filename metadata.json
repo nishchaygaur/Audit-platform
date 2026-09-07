@@ -1,0 +1,6 @@
+{
+  "name": "Audit Platform",
+  "description": "Cybersecurity GRC audit management platform for managing audits, frameworks, evidence, findings, and risks across workspaces.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
