@@ -430,23 +430,14 @@ export default function FindingsPage() {
     };
 
     if (editingFinding) {
-      setFindingsByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: (current[workspaceId] ?? []).map(
+      setFindings((current) => current.map(
           (finding) =>
             finding.id === editingFinding.id
               ? newFinding
               : finding
-        ),
-      }));
+        ));
     } else {
-      setFindingsByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: [
-          newFinding,
-          ...(current[workspaceId] ?? []),
-        ],
-      }));
+      setFindings((current) => [newFinding, ...current]);
     }
 
     setShowModal(false);
@@ -463,12 +454,7 @@ export default function FindingsPage() {
       return;
     }
 
-    setFindingsByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (
-        current[workspaceId] ?? []
-      ).filter((item) => item.id !== finding.id),
-    }));
+    setFindings((current) => current.filter((item) => item.id !== finding.id));
 
     setOpenMenu(null);
   }
@@ -477,16 +463,11 @@ export default function FindingsPage() {
     finding: Finding,
     status: FindingStatus
   ) {
-    setFindingsByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (
-        current[workspaceId] ?? []
-      ).map((item) =>
+    setFindings((current) => current.map((item) =>
         item.id === finding.id
           ? { ...item, status }
           : item
-      ),
-    }));
+      ));
 
     setOpenMenu(null);
   }

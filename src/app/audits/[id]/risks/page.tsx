@@ -4,7 +4,7 @@ import { getRisks } from "@/actions/risks";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   ArrowLeft,
   CalendarDays,

@@ -21,7 +21,7 @@ export async function signIn(formData: FormData) {
       return { error: 'Invalid credentials' };
     }
 
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await bcrypt.compare(password, user.password as string);
     
     if (!isValid) {
       return { error: 'Invalid credentials' };

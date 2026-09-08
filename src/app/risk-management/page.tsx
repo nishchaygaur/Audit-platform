@@ -304,7 +304,6 @@ export default function RiskManagementPage() {
     });
   }, [risks, search, levelFilter, statusFilter]);
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading risks...</div>;
   const critical = risks.filter((risk) => risk.level === "Critical").length;
   const high = risks.filter((risk) => risk.level === "High").length;
   const open = risks.filter((risk) => risk.status === "Open").length;

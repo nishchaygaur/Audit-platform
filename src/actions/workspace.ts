@@ -53,7 +53,7 @@ export async function addWorkspaceMember(workspaceId: string, email: string, rol
   if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
 
   const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(session.user.id, workspaceId) as { role: string } | undefined;
-  if (!membership || !hasPermission(membership.role, "workspace.manage")) return { error: "Permission denied" };
+  if (!membership || !hasPermission(membership.role as any, "workspace.manage")) return { error: "Permission denied" };
 
   const user = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email) as { id: string } | undefined;
   if (!user) return { error: "User not found. Ask them to sign up first." };
@@ -74,7 +74,7 @@ export async function updateWorkspaceMember(workspaceId: string, userId: string,
   if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
 
   const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(session.user.id, workspaceId) as { role: string } | undefined;
-  if (!membership || !hasPermission(membership.role, "workspace.manage")) return { error: "Permission denied" };
+  if (!membership || !hasPermission(membership.role as any, "workspace.manage")) return { error: "Permission denied" };
 
   if (userId === session.user.id) return { error: "Cannot change your own role" };
 
@@ -91,7 +91,7 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
   if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
 
   const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(session.user.id, workspaceId) as { role: string } | undefined;
-  if (!membership || !hasPermission(membership.role, "workspace.manage")) return { error: "Permission denied" };
+  if (!membership || !hasPermission(membership.role as any, "workspace.manage")) return { error: "Permission denied" };
 
   if (userId === session.user.id) return { error: "Cannot remove yourself" };
 

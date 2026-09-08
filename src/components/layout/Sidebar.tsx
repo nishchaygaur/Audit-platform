@@ -117,7 +117,6 @@ export default function Sidebar() {  const { user } = useAuth();
     workspaces,
     currentWorkspace,
     setWorkspace,
-    addWorkspace,
   } = useWorkspace();
 
   const router = useRouter();
@@ -174,10 +173,6 @@ export default function Sidebar() {  const { user } = useAuth();
     e.preventDefault();
     if (!newWorkspaceName.trim()) return;
 
-    addWorkspace({
-      name: newWorkspaceName.trim(),
-      description: `${newWorkspaceIndustry} • ${newWorkspaceFramework} Compliance: ${newWorkspaceDesc || "Information Security Audit Management"}`,
-    });
 
     setNewWorkspaceName("");
     setNewWorkspaceDesc("");

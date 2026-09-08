@@ -70,7 +70,7 @@ export function AuditProvider({ children }: { children: ReactNode }) {
     const res = await getAudits(currentWorkspace.id);
     if (res.success && res.data) {
       // Map to fit the format, maybe `start_date` to `startDate`
-      const mapped = (res.data as any[]).map(a => ({
+      const mapped = (res.data as Record<string, unknown>[]).map(a => ({
         ...a,
         startDate: a.start_date,
         dueDate: a.due_date
@@ -101,7 +101,7 @@ export function AuditProvider({ children }: { children: ReactNode }) {
       }
       return undefined;
     },
-    [currentWorkspace?.id, refreshAudits]
+    [currentWorkspace, refreshAudits]
   );
 
   const updateAuditAsync = useCallback(
@@ -112,7 +112,7 @@ export function AuditProvider({ children }: { children: ReactNode }) {
         await refreshAudits();
       }
     },
-    [currentWorkspace?.id, refreshAudits]
+    [currentWorkspace, refreshAudits]
   );
 
   const deleteAuditAsync = useCallback(
@@ -123,7 +123,7 @@ export function AuditProvider({ children }: { children: ReactNode }) {
         await refreshAudits();
       }
     },
-    [currentWorkspace?.id, refreshAudits]
+    [currentWorkspace, refreshAudits]
   );
 
   const value = useMemo(

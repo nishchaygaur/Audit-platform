@@ -2,15 +2,15 @@
 
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { hasPermission } from "@/lib/rbac";
+import { hasPermission, type Permission } from "@/lib/rbac";
 import { requirePermission } from "@/lib/server-rbac";
 import crypto from "crypto";
 
 // Returns true if the user has the required permission in the workspace
-async function authorize(userId: string, workspaceId: string, permission: string) {
+async function authorize(userId: string, workspaceId: string, permission: Permission) {
   const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
   if (!membership) return false;
-  return hasPermission(membership.role, permission);
+  return hasPermission(membership.role as any, permission);
 }
 
 export async function getAudits(workspaceId: string) {

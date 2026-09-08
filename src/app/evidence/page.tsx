@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { getEvidences } from "@/actions/evidence";
 import type { ReactNode } from "react";
 import { useMemo, useState, useEffect } from "react";

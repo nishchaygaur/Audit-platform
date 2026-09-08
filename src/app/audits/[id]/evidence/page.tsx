@@ -473,9 +473,7 @@ export default function EvidencePage() {
     }
 
     if (editingEvidence) {
-      setEvidenceByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: (current[workspaceId] ?? []).map(
+      setEvidence((current) => current.map(
           (item) =>
             item.id === editingEvidence.id
               ? {
@@ -508,8 +506,7 @@ export default function EvidencePage() {
                     item.size,
                 }
               : item
-        ),
-      }));
+        ));
     } else {
       const nextNumber =
         (evidence.reduce(
@@ -552,13 +549,7 @@ export default function EvidencePage() {
           "Unknown",
       };
 
-      setEvidenceByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: [
-          newEvidence,
-          ...(current[workspaceId] ?? []),
-        ],
-      }));
+      setEvidence((current) => [newEvidence, ...current]);
     }
 
     setShowModal(false);
@@ -575,15 +566,10 @@ export default function EvidencePage() {
       return;
     }
 
-    setEvidenceByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (
-        current[workspaceId] ?? []
-      ).filter(
+    setEvidence((current) => current.filter(
         (evidenceItem) =>
           evidenceItem.id !== item.id
-      ),
-    }));
+      ));
 
     setOpenMenu(null);
   }
@@ -592,19 +578,14 @@ export default function EvidencePage() {
     item: Evidence,
     status: EvidenceStatus
   ) {
-    setEvidenceByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (
-        current[workspaceId] ?? []
-      ).map((evidenceItem) =>
+    setEvidence((current) => current.map((evidenceItem) =>
         evidenceItem.id === item.id
           ? {
               ...evidenceItem,
               status,
             }
           : evidenceItem
-      ),
-    }));
+      ));
 
     setOpenMenu(null);
   }
