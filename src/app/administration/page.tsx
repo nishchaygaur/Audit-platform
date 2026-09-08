@@ -20,10 +20,9 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 type UserStatus = "Active" | "Inactive" | "Pending";
 
 type Role =
-  | "Administrator"
-  | "Audit Manager"
+  | "Owner"
+  | "Admin"
   | "Auditor"
-  | "Risk Manager"
   | "Reviewer"
   | "Viewer";
 
@@ -43,7 +42,7 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
       id: "USR-001",
       name: "Alice Smith",
       email: "alice.smith@abctech.com",
-      role: "Administrator",
+      role: "Owner",
       department: "Security",
       status: "Active",
       lastLogin: "2024-07-01",
@@ -70,7 +69,7 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
       id: "USR-004",
       name: "Michael Lee",
       email: "michael.lee@abctech.com",
-      role: "Risk Manager",
+      role: "Admin",
       department: "Enterprise Risk",
       status: "Active",
       lastLogin: "2024-06-27",
@@ -91,7 +90,7 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
       id: "USR-101",
       name: "Robert Wilson",
       email: "robert.wilson@xyzfinance.com",
-      role: "Administrator",
+      role: "Owner",
       department: "Security",
       status: "Active",
       lastLogin: "2024-07-01",
@@ -109,7 +108,7 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
       id: "USR-103",
       name: "James Miller",
       email: "james.miller@xyzfinance.com",
-      role: "Risk Manager",
+      role: "Admin",
       department: "Risk",
       status: "Active",
       lastLogin: "2024-06-29",
@@ -130,7 +129,7 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
       id: "USR-201",
       name: "Daniel Smith",
       email: "daniel.smith@pqrhealth.com",
-      role: "Administrator",
+      role: "Owner",
       department: "Security",
       status: "Active",
       lastLogin: "2024-07-01",
@@ -148,7 +147,7 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
       id: "USR-203",
       name: "William Brown",
       email: "william.brown@pqrhealth.com",
-      role: "Risk Manager",
+      role: "Admin",
       department: "Enterprise Risk",
       status: "Active",
       lastLogin: "2024-06-28",
@@ -166,25 +165,22 @@ const workspaceUsers: Record<string, PlatformUser[]> = {
 };
 
 const roleDescriptions: Record<Role, string> = {
-  Administrator:
-    "Full workspace access including users, configuration and audit management.",
-  "Audit Manager":
-    "Manages audits, audit plans, controls, evidence and audit reporting.",
+  Owner:
+    "Full workspace control including billing, deletion, and user management.",
+  Admin:
+    "Administrative access including users, configuration and audit management.",
   Auditor:
     "Performs audit assessments and manages evidence, findings and audit activities.",
-  "Risk Manager":
-    "Manages organizational risks, risk assessments and treatment activities.",
   Reviewer:
     "Reviews audit activities, findings, evidence and reports.",
   Viewer:
-    "Read-only access to permitted workspace information.",
+    "Read-only access to published audits, reports and metrics.",
 };
 
 const roleClasses: Record<Role, string> = {
-  Administrator: "bg-purple-100 text-purple-700",
-  "Audit Manager": "bg-blue-100 text-blue-700",
+  Owner: "bg-purple-100 text-purple-700",
+  Admin: "bg-blue-100 text-blue-700",
   Auditor: "bg-cyan-100 text-cyan-700",
-  "Risk Manager": "bg-orange-100 text-orange-700",
   Reviewer: "bg-green-100 text-green-700",
   Viewer: "bg-slate-100 text-slate-600",
 };
@@ -226,6 +222,7 @@ export default function AdministrationPage() {
   "w-full h-9 rounded-lg border border-slate-200 px-2.5 text-[12px] text-slate-700 outline-none bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUsers(
       JSON.parse(
         JSON.stringify(workspaceUsers[currentWorkspace.id] ?? [])
@@ -265,7 +262,7 @@ export default function AdministrationPage() {
   ).length;
 
   const administrators = users.filter(
-    (user) => user.role === "Administrator"
+    (user) => user.role === "Owner"
   ).length;
 
   function openCreateModal() {
@@ -299,7 +296,8 @@ export default function AdministrationPage() {
     }
 
     if (editingUser) {
-      setUsers((current) =>
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUsers((current) =>
         current.map((user) =>
           user.id === editingUser.id
             ? {
@@ -331,7 +329,8 @@ export default function AdministrationPage() {
         lastLogin: "Never",
       };
 
-      setUsers((current) => [newUser, ...current]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUsers((current) => [newUser, ...current]);
     }
 
     setShowModal(false);
@@ -344,6 +343,7 @@ export default function AdministrationPage() {
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUsers((current) =>
       current.filter((user) => user.id !== id)
     );
@@ -358,6 +358,7 @@ export default function AdministrationPage() {
     const nextStatus: UserStatus =
       user.status === "Active" ? "Inactive" : "Active";
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUsers((current) =>
       current.map((item) =>
         item.id === user.id
@@ -471,16 +472,9 @@ export default function AdministrationPage() {
               className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[12px] text-slate-600 outline-none"
             >
               <option value="All">All Roles</option>
-              <option value="Administrator">
-                Administrator
-              </option>
-              <option value="Audit Manager">
-                Audit Manager
-              </option>
+              <option value="Owner">Owner</option>
+              <option value="Admin">Admin</option>
               <option value="Auditor">Auditor</option>
-              <option value="Risk Manager">
-                Risk Manager
-              </option>
               <option value="Reviewer">Reviewer</option>
               <option value="Viewer">Viewer</option>
             </select>
@@ -733,10 +727,9 @@ export default function AdministrationPage() {
                   }
                   className={inputClass}
                 >
-                  <option>Administrator</option>
-                  <option>Audit Manager</option>
+                  <option>Owner</option>
+                  <option>Admin</option>
                   <option>Auditor</option>
-                  <option>Risk Manager</option>
                   <option>Reviewer</option>
                   <option>Viewer</option>
                 </select>

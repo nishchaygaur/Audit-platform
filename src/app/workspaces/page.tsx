@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Building2, Check, LogOut, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
+import { signOut } from "@/actions/auth";
 
 const workspaces = [
   {
@@ -36,30 +38,24 @@ export default function WorkspacesPage() {
   const router = useRouter();
   const { currentWorkspace, setWorkspace } = useWorkspace();
 
-  const [authenticated, setAuthenticated] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("audit_authenticated") === "true";
-  });
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    const auth = localStorage.getItem("audit_authenticated") === "true";
-    if (!auth) {
+    if (!loading && !user) {
       router.replace("/signin");
     }
-  }, [router]);
+  }, [user, loading, router]);
 
   function selectWorkspace(workspaceId: string) {
     setWorkspace(workspaceId);
     router.push("/dashboard");
   }
 
-  function logout() {
-    localStorage.removeItem("audit_authenticated");
-    localStorage.removeItem("audit_user");
-    router.push("/signin");
+  async function logout() {
+    await signOut();
   }
 
-  if (!authenticated) {
+  if (loading || !user) {
     return null;
   }
 

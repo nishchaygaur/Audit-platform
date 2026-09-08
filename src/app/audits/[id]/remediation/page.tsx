@@ -177,6 +177,7 @@ export default function RemediationPage() {
     if (item.status === "Completed") return false;
 
     const due = new Date(item.dueDate);
+    // eslint-disable-next-line react-hooks/purity
     return due.getTime() < Date.now();
   }).length;
 

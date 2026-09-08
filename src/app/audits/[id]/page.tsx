@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import type { ReactNode } from "react";
@@ -1710,6 +1711,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
     const all = getStoredFindings();
     const filtered = all.filter((f) => f.auditId === audit.id);
     if (filtered.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFindingsList(filtered);
     } else {
       const defaults: Finding[] = [
@@ -2268,6 +2270,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
     const all = getStoredRisks();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRisksList(filtered);
     } else {
       const defaults: RiskItem[] = [
@@ -2671,6 +2674,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
     const all = getStoredRemediation();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActionsList(filtered);
     } else {
       const defaults: RemediationItem[] = [
@@ -2691,6 +2695,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
           createdDate: "06 May 2024",
         },
       ];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActionsList(defaults);
       saveStoredRemediation([...all, ...defaults]);
     }
@@ -3106,6 +3111,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
     const all = getStoredReports();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReportsList(filtered);
     } else {
       const defaults: ReportItem[] = [
@@ -3152,6 +3158,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
           },
         },
       ];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReportsList(defaults);
       saveStoredReports([...all, ...defaults]);
     }

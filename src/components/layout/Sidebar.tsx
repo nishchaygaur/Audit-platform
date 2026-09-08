@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { signOut } from "@/actions/auth";
+
 
 import {
   LayoutDashboard,
@@ -108,7 +111,7 @@ const mainNavigation: NavItem[] = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar() {  const { user } = useAuth();  
   const {
     workspaces,
     currentWorkspace,
@@ -181,13 +184,9 @@ export default function Sidebar() {
     setWorkspaceOpen(false);
   }
 
-  function handleLogout() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("audit_authenticated");
-      localStorage.removeItem("audit_user");
-    }
+  async function handleLogout() {
     setUserMenuOpen(false);
-    router.push("/signin");
+    await signOut();
   }
 
   return (
@@ -457,18 +456,12 @@ export default function Sidebar() {
               userMenuOpen ? "bg-white/15" : "hover:bg-white/10"
             }`}
           >
-            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-[12px] font-bold text-white shadow-sm">
-              AS
-              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[#031b3d]" />
+            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-[12px] font-bold text-white shadow-sm">{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}<span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[#031b3d]" />
             </div>
 
             <div className="min-w-0 flex-1 text-left leading-tight">
-              <div className="truncate text-[12.5px] font-medium text-slate-100">
-                Alice Smith
-              </div>
-              <div className="truncate text-[10.5px] text-slate-400">
-                Workspace Admin
-              </div>
+              <div className="truncate text-[12.5px] font-medium text-slate-100">{user?.name || "Unknown User"}</div>
+              <div className="truncate text-[10.5px] text-slate-400">{user?.role || "Viewer"}</div>
             </div>
 
             <ChevronDown
@@ -485,15 +478,13 @@ export default function Sidebar() {
               className="absolute bottom-[66px] left-3 right-3 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 text-slate-800 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-100"
             >
               <div className="border-b border-slate-100 px-3 py-2 bg-slate-50/80">
-                <p className="text-[12px] font-semibold text-slate-900">
-                  Alice Smith
-                </p>
+                <p className="text-[12px] font-semibold text-slate-900">{user?.name || "Unknown User"}</p>
                 <p className="truncate text-[11px] text-slate-500">
-                  alice.smith@abctech.com
+                  {user?.email || "No email provided"}
                 </p>
                 <div className="mt-1 flex items-center gap-1.5">
                   <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
-                    Lead Auditor & Admin
+                    {user?.role || "Viewer"}
                   </span>
                 </div>
               </div>
