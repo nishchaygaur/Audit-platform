@@ -1,4 +1,7 @@
 "use client";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useEffect } from "react";
+import { getFindings } from "@/actions/findings";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
@@ -185,8 +188,22 @@ const INITIAL_FINDINGS: Finding[] = [
 ];
 
 export default function FindingsPage() {
-  const [findings, setFindings] =
-    useState<Finding[]>(INITIAL_FINDINGS);
+  const { currentWorkspace } = useWorkspace();
+  const [findings, setFindings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (currentWorkspace?.id) {
+      getFindings(currentWorkspace.id).then((res: any) => {
+        if (res.success && res.data) setFindings(res.data.map((f: any) => ({ ...f, findingId: f.reference, identified: f.identified_date, dueDate: f.due_date })));
+        setLoading(false);
+      });
+    } else {
+      setFindings([]);
+      setLoading(false);
+    }
+  }, [currentWorkspace?.id]);
+  //
+
 
   const [search, setSearch] = useState("");
 
@@ -288,6 +305,8 @@ export default function FindingsPage() {
     statusFilter,
     frameworkFilter,
   ]);
+
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading findings...</div>;
 
   const totalFindings = findings.length;
 
@@ -543,7 +562,7 @@ export default function FindingsPage() {
               }
               label="Resolved"
               value={String(resolvedFindings)}
-              valueClass="text-emerald-600"
+              valueClass="textmerald-600"
             />
           </div>
 
@@ -1026,7 +1045,7 @@ function FindingRow({
   const statusClass =
     item.status === "Resolved" ||
     item.status === "Closed"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : item.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : item.status === "Accepted Risk"
@@ -1175,7 +1194,7 @@ function FindingRow({
               <button
                 type="button"
                 onClick={onResolve}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] textmerald-600 hover:bgmerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Mark Resolved
@@ -1458,7 +1477,7 @@ function FindingModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
 
           <button
             type="button"
@@ -1620,7 +1639,7 @@ function FindingDetails({
   const statusClass =
     item.status === "Resolved" ||
     item.status === "Closed"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : item.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : item.status === "Accepted Risk"
@@ -1775,7 +1794,7 @@ function FindingDetails({
 
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
 
           <button
             type="button"
@@ -1824,3 +1843,4 @@ function DetailItem({
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

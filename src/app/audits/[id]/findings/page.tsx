@@ -1,4 +1,7 @@
 "use client";
+import { useEffect } from "react";
+import { useParams } from "next/navigation";
+import { getFindings } from "@/actions/findings";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
@@ -254,8 +257,23 @@ export default function FindingsPage() {
 
   const workspaceId = currentWorkspace.id;
 
-  const [findingsByWorkspace, setFindingsByWorkspace] =
-    useState<Record<string, Finding[]>>(INITIAL_FINDINGS);
+  const [findings, setFindings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const params = useParams();
+  
+  useEffect(() => {
+    if (workspaceId && params.id) {
+      getFindings(workspaceId, params.id as string).then((res: any) => {
+        if (res.success && res.data) {
+          setFindings(res.data.map((f: any) => ({ ...f, reference: f.reference, identifiedDate: f.identified_date, dueDate: f.due_date })));
+        }
+        setLoading(false);
+      });
+    } else {
+      setFindings([]);
+      setLoading(false);
+    }
+  }, [workspaceId, params.id]);
 
   const [search, setSearch] = useState("");
 
@@ -292,7 +310,7 @@ export default function FindingsPage() {
   const [formStatus, setFormStatus] =
     useState<FindingStatus>("Open");
 
-  const findings = findingsByWorkspace[workspaceId] ?? [];
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading findings...</div>;
 
   const filteredFindings = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -884,7 +902,7 @@ function FindingRow({
       : finding.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : finding.status === "Resolved"
-          ? "bg-emerald-50 text-emerald-700"
+          ? "bgmerald-50 textmerald-700"
           : finding.status === "Accepted"
             ? "bg-violet-50 text-violet-700"
             : "bg-slate-100 text-slate-500";
@@ -1175,7 +1193,7 @@ function FindingModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1307,3 +1325,4 @@ function getInitials(name: string) {
       .toUpperCase() || "NA"
   );
 }
+export const dynamic = 'force-dynamic';

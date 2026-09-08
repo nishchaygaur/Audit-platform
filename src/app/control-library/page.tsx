@@ -527,7 +527,7 @@ export default function ControlLibraryPage() {
             <SummaryCard
               label="Mapped"
               value={String(mappedCount)}
-              valueClass="text-emerald-600"
+              valueClass="textmerald-600"
               icon={
                 <Check className="h-4 w-4" />
               }
@@ -745,7 +745,7 @@ export default function ControlLibraryPage() {
                       <td className="px-4 py-4 align-top">
 
                         {control.status === "Mapped" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-medium text-emerald-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bgmerald-50 px-2 py-1 text-[8px] font-medium textmerald-700">
                             <Check className="h-3 w-3" />
                             Mapped
                           </span>
@@ -759,7 +759,7 @@ export default function ControlLibraryPage() {
 
                       <td className="px-4 py-4 align-top">
 
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justifynd gap-1">
 
                           <button
                             type="button"
@@ -923,7 +923,7 @@ export default function ControlLibraryPage() {
 
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <div className="flex justifynd gap-2 border-t border-slate-100 px-6 py-4">
 
                 <button
                   type="button"
@@ -1306,7 +1306,7 @@ export default function ControlLibraryPage() {
 
               </div>
 
-              <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <div className="flex justifynd border-t border-slate-100 px-6 py-4">
 
                 <button
                   type="button"
@@ -1395,7 +1395,7 @@ function SelectFilter({
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
     </div>
   );
 }
@@ -1505,7 +1505,7 @@ function ModalFooter({
   confirmLabel: string;
 }) {
   return (
-    <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+    <div className="flex justifynd gap-2 border-t border-slate-100 px-6 py-4">
 
       <button
         type="button"
@@ -1529,3 +1529,4 @@ function ModalFooter({
 
 const inputClass =
   "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
+export const dynamic = 'force-dynamic';

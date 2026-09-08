@@ -727,3 +727,4 @@ function InfoBox({ children }: { children: React.ReactNode }) {
 }
 
 const workspaceSettingsMap = workspaceSettings;
+export const dynamic = 'force-dynamic';

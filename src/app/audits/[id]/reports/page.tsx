@@ -193,7 +193,7 @@ const STATUS_OPTIONS: Array<ReportStatus | "All Statuses"> = [
 function statusClasses(status: ReportStatus) {
   switch (status) {
     case "Completed":
-      return "bg-emerald-50 text-emerald-700";
+      return "bgmerald-50 textmerald-700";
     case "Generating":
       return "bg-blue-50 text-blue-700";
     case "Draft":
@@ -512,9 +512,9 @@ export default function ReportsPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a94a6]">
                   Completed
                 </p>
-                <CheckCircle2 size={18} className="text-emerald-500" />
+                <CheckCircle2 size={18} className="textmerald-500" />
               </div>
-              <p className="text-[25px] font-bold text-emerald-600">
+              <p className="text-[25px] font-bold textmerald-600">
                 {completed}
               </p>
               <p className="mt-1 text-[11px] text-[#94a3b8]">
@@ -603,7 +603,7 @@ export default function ReportsPage() {
 
                 <Filter
                   size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
+                  className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
                 />
               </div>
             </div>
@@ -698,10 +698,10 @@ export default function ReportsPage() {
             </div>
 
             <div className="rounded-xl border border-[#e5e9f0] bg-white p-5">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bgmerald-50">
                 <CheckCircle2
                   size={17}
-                  className="text-emerald-600"
+                  className="textmerald-600"
                 />
               </div>
               <h3 className="text-[13px] font-semibold">
@@ -822,7 +822,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[#edf0f5] px-6 py-4">
+            <div className="flex justifynd gap-3 border-t border-[#edf0f5] px-6 py-4">
               <button
                 onClick={() => setShowGenerateModal(false)}
                 className="rounded-lg border border-[#dfe4ec] px-4 py-2 text-[12px] font-medium text-[#475569] hover:bg-[#f8fafc]"
@@ -918,7 +918,7 @@ export default function ReportsPage() {
                   <p className="text-[10px] uppercase text-[#8a94a6]">
                     Evidence
                   </p>
-                  <p className="mt-1 text-[20px] font-bold text-emerald-600">
+                  <p className="mt-1 text-[20px] font-bold textmerald-600">
                     {selectedReport.evidence}
                   </p>
                 </div>
@@ -963,7 +963,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[#edf0f5] px-6 py-4">
+            <div className="flex justifynd gap-3 border-t border-[#edf0f5] px-6 py-4">
               <button
                 onClick={() =>
                   alert(
@@ -989,3 +989,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

@@ -60,15 +60,34 @@ export async function signUp(formData: FormData) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = crypto.randomUUID();
 
-    db.prepare('INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)').run(
-      id, name, email, hashedPassword, 'Owner'
-    );
+    const userCountRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const isFirstUser = userCountRow.count === 0;
+
+    // Use a transaction to ensure all inserts succeed together
+    const insertTx = db.transaction(() => {
+      // Global user role defaults to Viewer for everyone. Workspace roles are authoritative.
+      db.prepare('INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)').run(
+        id, name, email, hashedPassword, 'Viewer'
+      );
+
+      if (isFirstUser) {
+        const workspaceId = crypto.randomUUID();
+        db.prepare('INSERT INTO workspaces (id, name) VALUES (?, ?)').run(
+          workspaceId, 'My Workspace'
+        );
+        db.prepare('INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES (?, ?, ?)').run(
+          id, workspaceId, 'Owner'
+        );
+      }
+    });
+    
+    insertTx();
 
     const userObj = {
       id,
       name,
       email,
-      role: 'Owner', // Defaulting to Admin for first user
+      role: 'Viewer',
     };
 
     await setSession(userObj);

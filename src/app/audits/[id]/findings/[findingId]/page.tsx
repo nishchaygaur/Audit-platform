@@ -91,7 +91,7 @@ export default function FindingDetailsPage() {
   if (!finding) return null;
 
   const severityClass = finding.severity === "Critical" ? "bg-red-50 text-red-700" : finding.severity === "High" ? "bg-orange-50 text-orange-700" : finding.severity === "Medium" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600";
-  const statusClass = currentStatus === "Open" ? "bg-red-50 text-red-700" : currentStatus === "In Progress" ? "bg-blue-50 text-blue-700" : currentStatus === "Resolved" ? "bg-emerald-50 text-emerald-700" : currentStatus === "Accepted" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-600";
+  const statusClass = currentStatus === "Open" ? "bg-red-50 text-red-700" : currentStatus === "In Progress" ? "bg-blue-50 text-blue-700" : currentStatus === "Resolved" ? "bgmerald-50 textmerald-700" : currentStatus === "Accepted" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-600";
 
   function addComment() {
     if (!comment.trim()) return;
@@ -165,7 +165,7 @@ export default function FindingDetailsPage() {
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600"><FileCheck2 className="h-4 w-4" /></div>
                         <div className="min-w-0"><p className="truncate text-[11px] font-medium text-slate-700">{item.name}</p><p className="mt-0.5 text-[9px] text-slate-400">{item.ref} · {item.type} · {item.date}</p></div>
                       </div>
-                      <span className="ml-3 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-medium text-emerald-700">{item.status}</span>
+                      <span className="ml-3 rounded-full bgmerald-50 px-2.5 py-1 text-[9px] font-medium textmerald-700">{item.status}</span>
                     </div>
                   ))}
                 </div>
@@ -224,3 +224,5 @@ function Detail({ label, value }: { label: string; value: string }) { return <di
 function TimelineItem({ title, detail, date, last }: { title: string; detail: string; date: string; last?: boolean }) {
   return <div className="relative flex gap-3 pb-4 last:pb-0"><div className="flex w-3 shrink-0 justify-center"><span className="relative z-10 mt-1.5 h-2 w-2 rounded-full bg-blue-500 ring-4 ring-blue-50" />{!last && <span className="absolute left-[5px] top-4 h-full w-px bg-slate-200" />}</div><div className="min-w-0"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-medium text-slate-700">{title}</p><span className="shrink-0 text-[8px] text-slate-400">{date}</span></div><p className="mt-1 text-[9px] leading-4 text-slate-400">{detail}</p></div></div>;
 }
+
+export const dynamic = 'force-dynamic';

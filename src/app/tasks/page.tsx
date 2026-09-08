@@ -704,7 +704,7 @@ export default function TasksPage() {
                       </td>
 
                       <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justifynd gap-1">
                           <button
                             title="View"
                             onClick={() => openDetails(task)}
@@ -922,7 +922,7 @@ export default function TasksPage() {
               </FormField>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            <div className="flex justifynd gap-2 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => setShowModal(false)}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] font-medium text-slate-600 hover:bg-slate-50"
@@ -1029,7 +1029,7 @@ export default function TasksPage() {
               )}
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            <div className="flex justifynd gap-2 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => {
                   setShowDetails(false);
@@ -1129,3 +1129,4 @@ function DetailItem({
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

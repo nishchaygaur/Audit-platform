@@ -641,7 +641,7 @@ export default function RemediationPage() {
             </div>
           </div>
 
-          <div className="flex justify-end border-t border-slate-200 px-6 py-4">
+          <div className="flex justifynd border-t border-slate-200 px-6 py-4">
             <button
               onClick={() => setSelectedRemediation(null)}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -747,7 +747,7 @@ export default function RemediationPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
             <button
               onClick={() => setShowAddModal(false)}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -803,7 +803,7 @@ function SummaryCard({
             danger
               ? "bg-red-50 text-red-600"
               : success
-              ? "bg-emerald-50 text-emerald-600"
+              ? "bgmerald-50 textmerald-600"
               : "bg-slate-100 text-slate-600"
           }`}
         >
@@ -835,7 +835,7 @@ function FilterSelect({
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
     </div>
   );
 }
@@ -853,7 +853,7 @@ function PriorityBadge({ priority }: { priority: Priority }) {
     Critical: "bg-red-50 text-red-700",
     High: "bg-orange-50 text-orange-700",
     Medium: "bg-amber-50 text-amber-700",
-    Low: "bg-emerald-50 text-emerald-700",
+    Low: "bgmerald-50 textmerald-700",
   };
 
   return (
@@ -874,7 +874,7 @@ function StatusBadge({
     Open: "bg-red-50 text-red-700",
     "In Progress": "bg-blue-50 text-blue-700",
     "Pending Review": "bg-amber-50 text-amber-700",
-    Completed: "bg-emerald-50 text-emerald-700",
+    Completed: "bgmerald-50 textmerald-700",
     Overdue: "bg-red-50 text-red-700",
   };
 
@@ -961,3 +961,4 @@ function Modal({
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

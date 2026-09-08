@@ -398,12 +398,12 @@ const severityStyles: Record<Severity, string> = {
   Critical: "bg-red-500",
   High: "bg-orange-500",
   Medium: "bg-amber-400",
-  Low: "bg-emerald-500",
+  Low: "bgmerald-500",
 };
 
 function statusClass(status: AuditStatus) {
   if (status === "Completed") {
-    return "bg-emerald-50 text-emerald-700";
+    return "bgmerald-50 textmerald-700";
   }
 
   if (status === "In Review") {
@@ -431,8 +431,8 @@ function ActivityIcon({ type }: { type: ActivityItem["icon"] }) {
     },
     audit: {
       icon: ClipboardCheck,
-      bg: "bg-emerald-50",
-      text: "text-emerald-600",
+      bg: "bgmerald-50",
+      text: "textmerald-600",
     },
     risk: {
       icon: ShieldAlert,
@@ -524,7 +524,7 @@ function StatCard({
 
       <div
         className={`mt-5 flex items-center gap-1 text-[10px] ${
-          positive ? "text-emerald-600" : "text-red-500"
+          positive ? "textmerald-600" : "text-red-500"
         }`}
       >
         {positive ? (
@@ -627,7 +627,7 @@ export default function DashboardPage() {
 
             <div className="flex items-center gap-2">
               <div className="relative">
-                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <CalendarDays className="pointervents-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
 
                 <select
                   value={period}
@@ -640,7 +640,7 @@ export default function DashboardPage() {
                   <option>01 Jan 2024 - 31 Jan 2024</option>
                 </select>
 
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                <ChevronDown className="pointervents-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               </div>
             </div>
           </div>
@@ -684,9 +684,9 @@ export default function DashboardPage() {
               change="27%"
               positive
               icon={
-                <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                <CheckCircle2 className="h-6 w-6 textmerald-600" />
               }
-              iconBg="bg-emerald-50"
+              iconBg="bgmerald-50"
             />
           </div>
 
@@ -749,7 +749,7 @@ export default function DashboardPage() {
                     label="Completed"
                     value={auditStatusCounts.Completed}
                     total={totalAudits}
-                    dot="bg-emerald-600"
+                    dot="bgmerald-600"
                   />
                 </div>
               </div>
@@ -781,7 +781,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
 
-                  <div className="absolute bottom-8 left-8 right-0 flex h-[168px] items-end justify-around">
+                  <div className="absolute bottom-8 left-8 right-0 flex h-[168px] itemsnd justify-around">
                     {data.findings.bySeverity.map((item) => (
                       <SeverityBar
                         key={item.severity}
@@ -801,7 +801,7 @@ export default function DashboardPage() {
               subtitle="Current control effectiveness"
             >
               <div className="px-5 pb-5">
-                <div className="mb-4 flex items-end justify-between">
+                <div className="mb-4 flex itemsnd justify-between">
                   <div>
                     <p className="text-[30px] font-semibold text-slate-900">
                       {controlRate}%
@@ -826,7 +826,7 @@ export default function DashboardPage() {
                     label="Effective"
                     value={data.controls.effective}
                     total={data.controls.total}
-                    dot="bg-emerald-500"
+                    dot="bgmerald-500"
                   />
                   <MetricRow
                     label="Partially Effective"
@@ -857,7 +857,7 @@ export default function DashboardPage() {
                 {
                   label: "Completed",
                   value: data.remediation.completed,
-                  color: "bg-emerald-500",
+                  color: "bgmerald-500",
                 },
                 {
                   label: "In Progress",
@@ -874,15 +874,15 @@ export default function DashboardPage() {
 
             <ProgressPanel
               title="Evidence Coverage"
-              icon={<FileCheck2 className="h-5 w-5 text-emerald-600" />}
-              iconBg="bg-emerald-50"
+              icon={<FileCheck2 className="h-5 w-5 textmerald-600" />}
+              iconBg="bgmerald-50"
               percentage={evidenceRate}
               mainLabel={`${data.evidence.approved} of ${data.evidence.total} approved`}
               rows={[
                 {
                   label: "Approved",
                   value: data.evidence.approved,
-                  color: "bg-emerald-500",
+                  color: "bgmerald-500",
                 },
                 {
                   label: "Pending Review",
@@ -929,7 +929,7 @@ export default function DashboardPage() {
                 {
                   label: "Low",
                   value: data.risks.low,
-                  color: "bg-emerald-500",
+                  color: "bgmerald-500",
                 },
               ]}
             />
@@ -1152,7 +1152,7 @@ function SeverityBar({
   const height = Math.max(12, Math.round((value / max) * 145));
 
   return (
-    <div className="flex h-full w-14 flex-col items-center justify-end">
+    <div className="flex h-full w-14 flex-col items-center justifynd">
       <span className="mb-1 text-[10px] font-semibold text-slate-700">
         {value}
       </span>
@@ -1299,7 +1299,7 @@ function HealthMetric({
         </div>
 
         {positive ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <CheckCircle2 className="h-4 w-4 textmerald-500" />
         ) : (
           <AlertTriangle className="h-4 w-4 text-amber-500" />
         )}
@@ -1307,7 +1307,7 @@ function HealthMetric({
 
       <p
         className={`mt-3 text-[9px] font-semibold ${
-          positive ? "text-emerald-600" : "text-amber-600"
+          positive ? "textmerald-600" : "text-amber-600"
         }`}
       >
         {status}
@@ -1315,3 +1315,4 @@ function HealthMetric({
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

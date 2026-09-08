@@ -245,7 +245,7 @@ export default function Sidebar() {  const { user } = useAuth();
             <div className="flex min-w-0 items-center gap-2">
               <Building2 className="h-4 w-4 shrink-0 text-blue-400" />
               <span className="truncate font-medium">
-                {currentWorkspace.name}
+                {currentWorkspace?.name || "Select Workspace"}
               </span>
             </div>
 
@@ -295,7 +295,7 @@ export default function Sidebar() {  const { user } = useAuth();
                         </span>
                       </span>
 
-                      {currentWorkspace.id === workspace.id && (
+                      {currentWorkspace?.id === workspace.id && (
                         <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" />
                       )}
                     </button>
@@ -396,7 +396,7 @@ export default function Sidebar() {  const { user } = useAuth();
           </div>
 
           {/* Administration */}
-          {hasPermission(user?.role, "workspace.manage") && (
+          {hasPermission(currentWorkspace?.role || user?.role, "workspace.manage") && (
             <Link
               href="/administration"
               id="sidebar-nav-administration"
@@ -462,7 +462,7 @@ export default function Sidebar() {  const { user } = useAuth();
 
             <div className="min-w-0 flex-1 text-left leading-tight">
               <div className="truncate text-[12.5px] font-medium text-slate-100">{user?.name || "Unknown User"}</div>
-              <div className="truncate text-[10.5px] text-slate-400">{user?.role || "Viewer"}</div>
+              <div className="truncate text-[10.5px] text-slate-400">{currentWorkspace?.role || user?.role || "Viewer"}</div>
             </div>
 
             <ChevronDown
@@ -485,7 +485,7 @@ export default function Sidebar() {  const { user } = useAuth();
                 </p>
                 <div className="mt-1 flex items-center gap-1.5">
                   <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
-                    {user?.role || "Viewer"}
+                    {currentWorkspace?.role || user?.role || "Viewer"}
                   </span>
                 </div>
               </div>

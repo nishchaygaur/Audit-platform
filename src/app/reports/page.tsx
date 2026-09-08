@@ -199,7 +199,7 @@ const frameworks = [
 function StatusBadge({ status }: { status: ReportStatus }) {
   if (status === "Completed") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+      <span className="inline-flex items-center gap-1.5 rounded-full bgmerald-50 px-2.5 py-1 text-xs font-medium textmerald-700">
         <CheckCircle2 size={13} />
         Completed
       </span>
@@ -505,7 +505,7 @@ export default function ReportsPage() {
 
                     <ChevronDown
                       size={15}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
                   </div>
 
@@ -525,7 +525,7 @@ export default function ReportsPage() {
 
                     <ChevronDown
                       size={15}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
                   </div>
                 </div>
@@ -626,7 +626,7 @@ export default function ReportsPage() {
                         </td>
 
                         <td className="px-5 py-4">
-                          <div className="flex justify-end gap-1">
+                          <div className="flex justifynd gap-1">
                             <button
                               onClick={() => setSelectedReport(report)}
                               className="rounded-md px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100"
@@ -722,7 +722,7 @@ export default function ReportsPage() {
 
                   <ChevronDown
                     size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
                 </div>
               </div>
@@ -745,13 +745,13 @@ export default function ReportsPage() {
 
                   <ChevronDown
                     size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+            <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => setShowGenerateModal(false)}
                 className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
@@ -856,7 +856,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+            <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => deleteReport(selectedReport.id)}
                 className="mr-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
@@ -887,3 +887,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

@@ -278,7 +278,7 @@ const FRAMEWORK_CONTROLS: Record<string, FrameworkControl[]> = {
 function getStatusClass(status: string) {
   switch (status) {
     case "Completed":
-      return "bg-emerald-50 text-emerald-700";
+      return "bgmerald-50 textmerald-700";
 
     case "In Review":
       return "bg-blue-50 text-blue-700";
@@ -436,7 +436,7 @@ export default function AuditsPage() {
     setShowCreateModal(true);
   }
 
-  function createAudit() {
+  async function createAudit() {
     if (!newAudit.name.trim()) {
       return;
     }
@@ -451,7 +451,7 @@ export default function AuditsPage() {
     }`;
 
     // Add to AuditContext
-    const created = addAudit({
+    const created = await addAudit({
       name: newAudit.name.trim(),
       framework: newAudit.framework,
       lead: newAudit.lead,
@@ -469,6 +469,8 @@ export default function AuditsPage() {
     });
 
     // Seed initial evidence placeholders into localStorage
+    if (!created) return;
+
     const allEvidence = getStoredEvidence();
     const seededEvidence: EvidenceItem[] = chosenControls.map((c, index) => ({
       id: `EVD-${created.id.replace("AUD-", "")}-${String(index + 1).padStart(3, "0")}`,
@@ -521,7 +523,7 @@ export default function AuditsPage() {
               </p>
             </div>
 
-            {hasPermission(user?.role, "audits.create") && (
+            {hasPermission(workspace.currentWorkspace?.role || user?.role, "audits.create") && (
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -568,7 +570,7 @@ export default function AuditsPage() {
               label="Completed"
               value={stats.completed}
               icon={
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <CheckCircle2 className="h-4 w-4 textmerald-600" />
               }
             />
 
@@ -981,12 +983,12 @@ export default function AuditsPage() {
                         isCurrent
                           ? "bg-blue-50 text-blue-700 border border-blue-200"
                           : isCompleted
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                          ? "bgmerald-50 textmerald-700 border bordermerald-100"
                           : "bg-slate-50 text-slate-400 border border-slate-100"
                       }`}
                     >
                       {isCompleted ? (
-                        <Check className="h-3 w-3 text-emerald-600" />
+                        <Check className="h-3 w-3 textmerald-600" />
                       ) : (
                         <span className="h-3 w-3 rounded-full border border-current text-[8px] flex items-center justify-center">
                           {item.step}
@@ -1034,7 +1036,7 @@ export default function AuditsPage() {
                           <option value="NIST 800-53">NIST SP 800-53 Rev. 5</option>
                           <option value="NIST RMF">NIST Risk Management Framework</option>
                         </select>
-                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                       </div>
                     </div>
 
@@ -1286,14 +1288,14 @@ export default function AuditsPage() {
                       </p>
                     </div>
 
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3.5">
-                      <div className="flex items-center gap-2 text-emerald-800">
-                        <Sparkles className="h-4 w-4 text-emerald-600" />
+                    <div className="rounded-lg border bordermerald-200 bgmerald-50/40 p-3.5">
+                      <div className="flex items-center gap-2 textmerald-800">
+                        <Sparkles className="h-4 w-4 textmerald-600" />
                         <span className="text-[12px] font-semibold">
                           Automated Evidence Seeding
                         </span>
                       </div>
-                      <p className="mt-1.5 text-[11px] text-emerald-900/80">
+                      <p className="mt-1.5 text-[11px] textmerald-900/80">
                         {selectedControlIds.length} initial evidence placeholders will be auto-generated in &apos;Pending Review&apos; status ready for auditor inspection.
                       </p>
                     </div>
@@ -1422,7 +1424,7 @@ function FilterButton({
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
 
     </div>
   );
@@ -1497,10 +1499,11 @@ function FormSelect({
           ))}
         </select>
 
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-[19px] h-3.5 w-3.5 text-slate-400" />
+        <ChevronDown className="pointervents-none absolute right-2.5 top-[19px] h-3.5 w-3.5 text-slate-400" />
 
       </div>
 
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

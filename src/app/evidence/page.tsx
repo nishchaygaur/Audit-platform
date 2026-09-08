@@ -1,6 +1,7 @@
 "use client";
+import { getEvidences } from "@/actions/evidence";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import {
   Upload,
@@ -138,8 +139,23 @@ const INITIAL_EVIDENCE: Evidence[] = [
 ];
 
 export default function EvidencePage() {
-  const [evidence, setEvidence] =
-    useState<Evidence[]>(INITIAL_EVIDENCE);
+  const { currentWorkspace } = useWorkspace();
+  const [evidence, setEvidence] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (currentWorkspace?.id) {
+      getEvidences(currentWorkspace.id).then((res: any) => {
+        if (res.success && res.data) {
+          setEvidence(res.data.map((e: any) => ({...e, evidenceId: e.reference, uploadedBy: e.uploaded_by, uploaded: e.date})));
+        }
+        setLoading(false);
+      });
+    } else {
+      setEvidence([]);
+      setLoading(false);
+    }
+  }, [currentWorkspace?.id]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -172,6 +188,7 @@ export default function EvidencePage() {
   const [formStatus, setFormStatus] =
     useState<EvidenceStatus>("Pending Review");
 
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading evidence...</div>;
   const filteredEvidence = useMemo(() => {
     const query = search.toLowerCase().trim();
 
@@ -396,7 +413,7 @@ export default function EvidencePage() {
               }
               label="Accepted"
               value={String(acceptedEvidence)}
-              valueClass="text-emerald-600"
+              valueClass="textmerald-600"
             />
 
             <SummaryCard
@@ -804,7 +821,7 @@ function EvidenceRow({
 }) {
   const statusClass =
     item.status === "Accepted"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : item.status === "Under Review"
         ? "bg-blue-50 text-blue-700"
         : item.status === "Pending Review"
@@ -902,7 +919,7 @@ function EvidenceRow({
               <button
                 type="button"
                 onClick={onAccept}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] textmerald-600 hover:bgmerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Accept Evidence
@@ -1130,7 +1147,7 @@ function EvidenceModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1246,7 +1263,7 @@ function EvidenceDetails({
 }) {
   const statusClass =
     item.status === "Accepted"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : item.status === "Rejected"
         ? "bg-red-50 text-red-700"
         : item.status === "Under Review"
@@ -1407,3 +1424,4 @@ function DetailItem({
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

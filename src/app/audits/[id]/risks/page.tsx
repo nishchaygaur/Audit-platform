@@ -1,4 +1,6 @@
 "use client";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { getRisks } from "@/actions/risks";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -107,7 +109,7 @@ const INITIAL_RISKS: Risk[] = [
     id: "RSK-004",
     title: "Insufficient security awareness",
     description:
-      "Insufficient employee security awareness may increase the likelihood of human-error incidents.",
+      "Insufficient employee security awareness may increase the likelihood of humanrror incidents.",
     category: "Human Resources",
     finding: "FND-004",
     framework: "ISO 27001",
@@ -197,7 +199,23 @@ export default function RisksPage() {
   const params = useParams<{ id: string }>();
   const auditId = params.id;
 
-  const [risks, setRisks] = useState<Risk[]>(INITIAL_RISKS);
+  const [risks, setRisks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { currentWorkspace } = useWorkspace();
+  
+  useEffect(() => {
+    if (currentWorkspace?.id && params.id) {
+      getRisks(currentWorkspace.id, params.id as string).then((res: any) => {
+        if (res.success && res.data) {
+          setRisks(res.data.map((r: any) => ({...r, dueDate: r.due_date, residualScore: r.residual_score, residualLevel: r.residual_level})));
+        }
+        setLoading(false);
+      });
+    } else {
+      setRisks([]);
+      setLoading(false);
+    }
+  }, [currentWorkspace?.id, params.id]);
   const [search, setSearch] = useState("");
 
   const [levelFilter, setLevelFilter] = useState<RiskLevel | "All">("All");
@@ -220,6 +238,7 @@ export default function RisksPage() {
     dueDate: "",
   });
 
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading risks...</div>;
   const filteredRisks = useMemo(() => {
     const query = search.toLowerCase().trim();
 
@@ -407,7 +426,7 @@ export default function RisksPage() {
               <Summary
                 label="Low"
                 value={String(low)}
-                valueClass="text-emerald-600"
+                valueClass="textmerald-600"
               />
             </div>
 
@@ -746,7 +765,7 @@ export default function RisksPage() {
               </Field>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+            <div className="flex justifynd gap-2 border-t border-slate-100 px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
@@ -840,11 +859,11 @@ function RiskRow({
         ? "bg-red-50 text-red-700"
         : risk.level === "Medium"
           ? "bg-amber-50 text-amber-700"
-          : "bg-emerald-50 text-emerald-700";
+          : "bgmerald-50 textmerald-700";
 
   const statusClass =
     risk.status === "Closed"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : risk.status === "Accepted"
         ? "bg-slate-100 text-slate-600"
         : risk.status === "In Treatment"
@@ -976,7 +995,7 @@ function RiskDetailModal({
         ? "bg-red-50 text-red-700"
         : risk.level === "Medium"
           ? "bg-amber-50 text-amber-700"
-          : "bg-emerald-50 text-emerald-700";
+          : "bgmerald-50 textmerald-700";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4">
@@ -1097,7 +1116,7 @@ function RiskDetailModal({
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+        <div className="flex justifynd border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1181,10 +1200,11 @@ function FilterSelect({
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
     </div>
   );
 }
 
 const inputClass =
   "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
+export const dynamic = 'force-dynamic';

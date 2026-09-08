@@ -19,6 +19,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
 import { hasPermission } from "@/lib/rbac";
 import { useRouter } from "next/navigation";
+import { addWorkspaceMember, updateWorkspaceMember, removeWorkspaceMember, getWorkspaceMembers } from "@/actions/workspace";
 
 type UserStatus = "Active" | "Inactive" | "Pending";
 
@@ -37,134 +38,6 @@ type PlatformUser = {
   department: string;
   status: UserStatus;
   lastLogin: string;
-};
-
-const workspaceUsers: Record<string, PlatformUser[]> = {
-  "abc-technologies": [
-    {
-      id: "USR-001",
-      name: "Alice Smith",
-      email: "alice.smith@abctech.com",
-      role: "Owner",
-      department: "Security",
-      status: "Active",
-      lastLogin: "2024-07-01",
-    },
-    {
-      id: "USR-002",
-      name: "John Carter",
-      email: "john.carter@abctech.com",
-      role: "Auditor",
-      department: "Internal Audit",
-      status: "Active",
-      lastLogin: "2024-06-30",
-    },
-    {
-      id: "USR-003",
-      name: "Emily Davis",
-      email: "emily.davis@abctech.com",
-      role: "Reviewer",
-      department: "Compliance",
-      status: "Active",
-      lastLogin: "2024-06-28",
-    },
-    {
-      id: "USR-004",
-      name: "Michael Lee",
-      email: "michael.lee@abctech.com",
-      role: "Admin",
-      department: "Enterprise Risk",
-      status: "Active",
-      lastLogin: "2024-06-27",
-    },
-    {
-      id: "USR-005",
-      name: "David Wilson",
-      email: "david.wilson@abctech.com",
-      role: "Viewer",
-      department: "IT Operations",
-      status: "Inactive",
-      lastLogin: "2024-06-15",
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: "USR-101",
-      name: "Robert Wilson",
-      email: "robert.wilson@xyzfinance.com",
-      role: "Owner",
-      department: "Security",
-      status: "Active",
-      lastLogin: "2024-07-01",
-    },
-    {
-      id: "USR-102",
-      name: "Emma Davis",
-      email: "emma.davis@xyzfinance.com",
-      role: "Auditor",
-      department: "Internal Audit",
-      status: "Active",
-      lastLogin: "2024-06-30",
-    },
-    {
-      id: "USR-103",
-      name: "James Miller",
-      email: "james.miller@xyzfinance.com",
-      role: "Admin",
-      department: "Risk",
-      status: "Active",
-      lastLogin: "2024-06-29",
-    },
-    {
-      id: "USR-104",
-      name: "Olivia Taylor",
-      email: "olivia.taylor@xyzfinance.com",
-      role: "Reviewer",
-      department: "Compliance",
-      status: "Pending",
-      lastLogin: "Never",
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: "USR-201",
-      name: "Daniel Smith",
-      email: "daniel.smith@pqrhealth.com",
-      role: "Owner",
-      department: "Security",
-      status: "Active",
-      lastLogin: "2024-07-01",
-    },
-    {
-      id: "USR-202",
-      name: "Sophia Johnson",
-      email: "sophia.johnson@pqrhealth.com",
-      role: "Auditor",
-      department: "Internal Audit",
-      status: "Active",
-      lastLogin: "2024-06-30",
-    },
-    {
-      id: "USR-203",
-      name: "William Brown",
-      email: "william.brown@pqrhealth.com",
-      role: "Admin",
-      department: "Enterprise Risk",
-      status: "Active",
-      lastLogin: "2024-06-28",
-    },
-    {
-      id: "USR-204",
-      name: "Olivia Wilson",
-      email: "olivia.wilson@pqrhealth.com",
-      role: "Viewer",
-      department: "IT",
-      status: "Inactive",
-      lastLogin: "2024-06-10",
-    },
-  ],
 };
 
 const roleDescriptions: Record<Role, string> = {
@@ -205,19 +78,18 @@ const emptyUser: Omit<PlatformUser, "id" | "lastLogin"> = {
 export default function AdministrationPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
 
   useEffect(() => {
-    if (!loading && (!user || !hasPermission(user?.role, "workspace.manage"))) {
+    if (!loading && (!user || !hasPermission(currentWorkspace?.role || user?.role, "workspace.manage"))) {
       router.replace("/dashboard");
     }
-  }, [user, loading, router]);
-  const { currentWorkspace } = useWorkspace();
+  }, [user, loading, router, currentWorkspace]);
 
   const [users, setUsers] = useState<PlatformUser[]>([]);
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
 
   const [showModal, setShowModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -233,22 +105,30 @@ export default function AdministrationPage() {
   "w-full h-9 rounded-lg border border-slate-200 px-2.5 text-[12px] text-slate-700 outline-none bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUsers(
-      JSON.parse(
-        JSON.stringify(workspaceUsers[currentWorkspace.id] ?? [])
-      )
-    );
+    if (currentWorkspace?.id) {
+      getWorkspaceMembers(currentWorkspace.id).then(members => {
+        setUsers(members.map(m => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          role: m.role as Role,
+          department: "General",
+          status: "Active",
+          lastLogin: new Date().toISOString().split('T')[0]
+        })));
+      });
+    }
 
+    // eslint-disable-next-line react-hooks/set-state-inffect
     setSearch("");
+    // eslint-disable-next-line react-hooks/set-state-inffect
     setRoleFilter("All");
-    setStatusFilter("All");
-  }, [currentWorkspace.id]);
+  }, [currentWorkspace?.id]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
       const searchable =
-        `${user.id} ${user.name} ${user.email} ${user.department} ${user.role}`.toLowerCase();
+        `${user.id} ${user.name} ${user.email} ${user.role}`.toLowerCase();
 
       const matchesSearch = searchable.includes(
         search.toLowerCase()
@@ -257,20 +137,9 @@ export default function AdministrationPage() {
       const matchesRole =
         roleFilter === "All" || user.role === roleFilter;
 
-      const matchesStatus =
-        statusFilter === "All" || user.status === statusFilter;
-
-      return matchesSearch && matchesRole && matchesStatus;
+      return matchesSearch && matchesRole;
     });
-  }, [users, search, roleFilter, statusFilter]);
-
-  const activeUsers = users.filter(
-    (user) => user.status === "Active"
-  ).length;
-
-  const pendingUsers = users.filter(
-    (user) => user.status === "Pending"
-  ).length;
+  }, [users, search, roleFilter]);
 
   const administrators = users.filter(
     (user) => user.role === "Owner"
@@ -296,52 +165,45 @@ export default function AdministrationPage() {
     setShowModal(true);
   }
 
-  function saveUser() {
-    if (
-      !form.name.trim() ||
-      !form.email.trim() ||
-      !form.department.trim()
-    ) {
-      alert("Please enter name, email and department.");
+  async function saveUser() {
+    if (!form.email.trim()) {
+      alert("Please enter an email address.");
       return;
     }
 
     if (editingUser) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUsers((current) =>
+      const res = await updateWorkspaceMember(currentWorkspace.id, editingUser.id, form.role);
+      if (res.error) {
+        alert(res.error);
+        return;
+      }
+      setUsers((current) =>
         current.map((user) =>
           user.id === editingUser.id
             ? {
                 ...user,
-                ...form,
-                name: form.name.trim(),
-                email: form.email.trim(),
-                department: form.department.trim(),
+                role: form.role
               }
             : user
         )
       );
     } else {
-      const nextNumber =
-        users.reduce((max, user) => {
-          const number = Number(user.id.replace(/\D/g, ""));
-
-          return Number.isFinite(number)
-            ? Math.max(max, number)
-            : max;
-        }, 0) + 1;
-
-      const newUser: PlatformUser = {
-        id: `USR-${String(nextNumber).padStart(3, "0")}`,
-        ...form,
-        name: form.name.trim(),
-        email: form.email.trim(),
-        department: form.department.trim(),
-        lastLogin: "Never",
-      };
-
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUsers((current) => [newUser, ...current]);
+      const res = await addWorkspaceMember(currentWorkspace.id, form.email.trim(), form.role);
+      if (res.error) {
+        alert(res.error);
+        return;
+      }
+      // Refresh list
+      const members = await getWorkspaceMembers(currentWorkspace.id);
+      setUsers(members.map(m => ({
+        id: m.id,
+        name: m.name,
+        email: m.email,
+        department: "General",
+        role: m.role as Role,
+        status: "Active",
+        lastLogin: new Date().toISOString().split('T')[0]
+      })));
     }
 
     setShowModal(false);
@@ -349,12 +211,17 @@ export default function AdministrationPage() {
     setForm(emptyUser);
   }
 
-  function deleteUser(id: string) {
+  async function deleteUser(id: string) {
     if (!confirm("Remove this user from the workspace?")) {
       return;
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const res = await removeWorkspaceMember(currentWorkspace.id, id);
+    if (res.error) {
+       alert(res.error);
+       return;
+    }
+
     setUsers((current) =>
       current.filter((user) => user.id !== id)
     );
@@ -362,27 +229,6 @@ export default function AdministrationPage() {
     if (selectedUser?.id === id) {
       setSelectedUser(null);
       setShowDetails(false);
-    }
-  }
-
-  function toggleStatus(user: PlatformUser) {
-    const nextStatus: UserStatus =
-      user.status === "Active" ? "Inactive" : "Active";
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUsers((current) =>
-      current.map((item) =>
-        item.id === user.id
-          ? { ...item, status: nextStatus }
-          : item
-      )
-    );
-
-    if (selectedUser?.id === user.id) {
-      setSelectedUser({
-        ...user,
-        status: nextStatus,
-      });
     }
   }
 
@@ -428,23 +274,11 @@ export default function AdministrationPage() {
         </div>
 
         {/* Summary */}
-        <div className="mb-6 grid grid-cols-4 gap-4">
+        <div className="mb-6 grid grid-cols-2 gap-4">
           <SummaryCard
             title="Total Users"
             value={users.length}
             icon={<Users size={19} />}
-          />
-
-          <SummaryCard
-            title="Active Users"
-            value={activeUsers}
-            icon={<CheckCircle2 size={19} />}
-          />
-
-          <SummaryCard
-            title="Pending Users"
-            value={pendingUsers}
-            icon={<ClockIcon />}
           />
 
           <SummaryCard
@@ -489,17 +323,6 @@ export default function AdministrationPage() {
               <option value="Reviewer">Reviewer</option>
               <option value="Viewer">Viewer</option>
             </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[12px] text-slate-600 outline-none"
-            >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-              <option value="Pending">Pending</option>
-            </select>
           </div>
 
           {/* Table */}
@@ -513,18 +336,6 @@ export default function AdministrationPage() {
 
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500">
                     Role
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500">
-                    Department
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500">
-                    Status
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500">
-                    Last Login
                   </th>
 
                   <th className="px-5 py-3 text-right text-[11px] font-semibold text-slate-500">
@@ -573,24 +384,8 @@ export default function AdministrationPage() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 text-[11px] text-slate-600">
-                      {user.department}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${statusClasses[user.status]}`}
-                      >
-                        {user.status}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-4 text-[11px] text-slate-500">
-                      {user.lastLogin}
-                    </td>
-
                     <td className="px-5 py-4">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex justifynd gap-1">
                         <button
                           title="View"
                           onClick={() => {
@@ -610,20 +405,6 @@ export default function AdministrationPage() {
                           className="rounded-md p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
                         >
                           <Pencil size={15} />
-                        </button>
-
-                        <button
-                          title={
-                            user.status === "Active"
-                              ? "Deactivate"
-                              : "Activate"
-                          }
-                          onClick={() =>
-                            toggleStatus(user)
-                          }
-                          className="rounded-md p-2 text-slate-400 hover:bg-green-50 hover:text-green-600"
-                        >
-                          <UserCog size={15} />
                         </button>
 
                         <button
@@ -698,24 +479,11 @@ export default function AdministrationPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 px-6 py-5">
-              <FormField label="Full Name">
-                <input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      name: e.target.value,
-                    })
-                  }
-                  placeholder="John Smith"
-                  className={inputClass}
-                />
-              </FormField>
-
               <FormField label="Email Address">
                 <input
                   type="email"
                   value={form.email}
+                  disabled={!!editingUser}
                   onChange={(e) =>
                     setForm({
                       ...form,
@@ -723,7 +491,7 @@ export default function AdministrationPage() {
                     })
                   }
                   placeholder="john@company.com"
-                  className={inputClass}
+                  className={inputClass + (editingUser ? " bg-slate-50 cursor-not-allowed text-slate-500" : "")}
                 />
               </FormField>
 
@@ -746,38 +514,7 @@ export default function AdministrationPage() {
                 </select>
               </FormField>
 
-              <FormField label="Department">
-                <input
-                  value={form.department}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      department: e.target.value,
-                    })
-                  }
-                  placeholder="Internal Audit"
-                  className={inputClass}
-                />
-              </FormField>
-
-              <FormField label="Status">
-                <select
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      status: e.target.value as UserStatus,
-                    })
-                  }
-                  className={inputClass}
-                >
-                  <option>Active</option>
-                  <option>Inactive</option>
-                  <option>Pending</option>
-                </select>
-              </FormField>
-
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
+              <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
                 <p className="text-[10px] font-semibold text-blue-700">
                   Role Access
                 </p>
@@ -788,7 +525,7 @@ export default function AdministrationPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            <div className="flex justifynd gap-2 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => setShowModal(false)}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] font-medium text-slate-600 hover:bg-slate-50"
@@ -851,25 +588,10 @@ export default function AdministrationPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 gap-5">
                 <DetailItem
                   label="Role"
                   value={selectedUser.role}
-                />
-
-                <DetailItem
-                  label="Department"
-                  value={selectedUser.department}
-                />
-
-                <DetailItem
-                  label="Status"
-                  value={selectedUser.status}
-                />
-
-                <DetailItem
-                  label="Last Login"
-                  value={selectedUser.lastLogin}
                 />
               </div>
 
@@ -884,7 +606,7 @@ export default function AdministrationPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            <div className="flex justifynd gap-2 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => {
                   setShowDetails(false);
@@ -894,16 +616,6 @@ export default function AdministrationPage() {
               >
                 <Pencil size={14} />
                 Edit
-              </button>
-
-              <button
-                onClick={() => toggleStatus(selectedUser)}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-[12px] font-medium text-white hover:bg-blue-700"
-              >
-                <UserCog size={14} />
-                {selectedUser.status === "Active"
-                  ? "Deactivate"
-                  : "Activate"}
               </button>
             </div>
           </div>
@@ -986,3 +698,4 @@ function ClockIcon() {
     </div>
   );
 }
+export const dynamic = 'force-dynamic';

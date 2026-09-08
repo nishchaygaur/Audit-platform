@@ -470,7 +470,7 @@ export default function AuditDetailsPage() {
 
   const statusClass =
     audit.status === "Completed"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : audit.status === "In Review"
         ? "bg-blue-50 text-blue-700"
         : audit.status === "Not Started"
@@ -716,7 +716,7 @@ function OverviewPanel({ audit }: { audit: Audit }) {
                 initials="ED"
                 name="Emily Davis"
                 role="Auditor"
-                avatar="bg-emerald-100 text-emerald-700"
+                avatar="bgmerald-100 textmerald-700"
               />
             </div>
           </section>
@@ -929,7 +929,7 @@ function ControlsPanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Compliant"
           value={String(summary.compliant)}
-          className="text-emerald-600"
+          className="textmerald-600"
         />
 
         <ControlSummary
@@ -1105,7 +1105,7 @@ function ControlRow({
   status: string;
 }) {
   const statusStyles: Record<string, string> = {
-    Compliant: "bg-emerald-50 text-emerald-700",
+    Compliant: "bgmerald-50 textmerald-700",
     "Partially Compliant": "bg-amber-50 text-amber-700",
     "Non-Compliant": "bg-red-50 text-red-700",
     "Under Review": "bg-blue-50 text-blue-700",
@@ -1205,7 +1205,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
     const allEvidence = getStoredEvidence();
     const filtered = allEvidence.filter((e) => e.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setEvidenceList(filtered);
     } else {
       // Create sensible defaults for this audit if none yet stored
@@ -1366,7 +1366,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Accepted"
           value={String(verifiedCount)}
-          className="text-emerald-600"
+          className="textmerald-600"
         />
         <ControlSummary
           label="Under Review"
@@ -1451,7 +1451,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                 <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                     item.status === "Accepted"
-                      ? "bg-emerald-50 text-emerald-700"
+                      ? "bgmerald-50 textmerald-700"
                       : item.status === "Under Review"
                       ? "bg-blue-50 text-blue-700"
                       : item.status === "Rejected"
@@ -1579,7 +1579,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                 <p className="text-[10px] text-slate-400">PDF, XLSX, DOCX up to 25MB</p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
@@ -1669,7 +1669,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end border-t border-slate-100 pt-3">
+            <div className="mt-6 flex justifynd border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={() => setSelectedEvidence(null)}
@@ -1711,7 +1711,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
     const all = getStoredFindings();
     const filtered = all.filter((f) => f.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setFindingsList(filtered);
     } else {
       const defaults: Finding[] = [
@@ -1974,7 +1974,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
                     <span
                       className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                         item.status === "Resolved" || item.status === "Closed"
-                          ? "bg-emerald-50 text-emerald-700"
+                          ? "bgmerald-50 textmerald-700"
                           : item.status === "In Progress"
                           ? "bg-blue-50 text-blue-700"
                           : item.status === "Accepted Risk"
@@ -2122,7 +2122,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
@@ -2232,7 +2232,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end border-t border-slate-100 pt-3">
+            <div className="mt-6 flex justifynd border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={() => setSelectedFinding(null)}
@@ -2270,7 +2270,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
     const all = getStoredRisks();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setRisksList(filtered);
     } else {
       const defaults: RiskItem[] = [
@@ -2382,7 +2382,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Low"
           value={String(lowCount)}
-          className="text-emerald-600"
+          className="textmerald-600"
         />
       </div>
 
@@ -2425,7 +2425,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
                       ? "bg-orange-50 text-orange-700"
                       : item.level === "Medium"
                       ? "bg-amber-50 text-amber-700"
-                      : "bg-emerald-50 text-emerald-700"
+                      : "bgmerald-50 textmerald-700"
                   }`}
                 >
                   {item.level} ({item.score})
@@ -2560,7 +2560,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
@@ -2637,7 +2637,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end border-t border-slate-100 pt-3">
+            <div className="mt-6 flex justifynd border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={() => setSelectedRisk(null)}
@@ -2674,7 +2674,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
     const all = getStoredRemediation();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setActionsList(filtered);
     } else {
       const defaults: RemediationItem[] = [
@@ -2695,7 +2695,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
           createdDate: "06 May 2024",
         },
       ];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setActionsList(defaults);
       saveStoredRemediation([...all, ...defaults]);
     }
@@ -2796,7 +2796,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Completed"
           value={String(completedCount)}
-          className="text-emerald-600"
+          className="textmerald-600"
         />
       </div>
 
@@ -2848,7 +2848,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
                 <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                     item.status === "Completed"
-                      ? "bg-emerald-50 text-emerald-700"
+                      ? "bgmerald-50 textmerald-700"
                       : item.status === "In Progress"
                       ? "bg-blue-50 text-blue-700"
                       : "bg-red-50 text-red-700"
@@ -2976,7 +2976,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
@@ -3078,7 +3078,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end border-t border-slate-100 pt-3">
+            <div className="mt-6 flex justifynd border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={() => setSelectedAction(null)}
@@ -3111,7 +3111,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
     const all = getStoredReports();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setReportsList(filtered);
     } else {
       const defaults: ReportItem[] = [
@@ -3158,7 +3158,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
           },
         },
       ];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-inffect
       setReportsList(defaults);
       saveStoredReports([...all, ...defaults]);
     }
@@ -3278,7 +3278,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700">
+                  <span className="rounded-full bgmerald-50 px-2.5 py-1 text-[10px] font-medium textmerald-700">
                     {item.status}
                   </span>
                   <button
@@ -3357,7 +3357,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 <p>• Risk assessment register & mitigation roadmap</p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowGenerateModal(false)}
@@ -3422,7 +3422,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Controls Evaluated</span>
                   <p className="text-[16px] font-semibold text-slate-900">{audit.controls}</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">Compliant: ~65%</p>
+                  <p className="text-[10px] textmerald-600 mt-0.5">Compliant: ~65%</p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Evidence Collected</span>
@@ -3456,7 +3456,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <div className="mt-6 flex justifynd gap-2 border-t border-slate-100 pt-4">
               <button
                 type="button"
                 onClick={() => setSelectedReport(null)}
@@ -3619,3 +3619,4 @@ function QuickAction({
     </button>
   );
 }
+export const dynamic = 'force-dynamic';

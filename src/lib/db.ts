@@ -36,6 +36,94 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS audits (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    framework TEXT NOT NULL,
+    lead TEXT NOT NULL,
+    status TEXT NOT NULL,
+    progress INTEGER NOT NULL DEFAULT 0,
+    start_date TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    objective TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    controls INTEGER NOT NULL DEFAULT 0,
+    evidence INTEGER NOT NULL DEFAULT 0,
+    findings INTEGER NOT NULL DEFAULT 0,
+    risks INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS findings (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    audit_id TEXT NOT NULL,
+    reference TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    framework TEXT NOT NULL,
+    control TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    identified_date TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS risks (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    audit_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    finding TEXT NOT NULL,
+    framework TEXT NOT NULL,
+    control TEXT NOT NULL,
+    likelihood TEXT NOT NULL,
+    impact TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    treatment TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    residual_score INTEGER NOT NULL,
+    residual_level TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS evidence (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    audit_id TEXT NOT NULL,
+    reference TEXT NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    control TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL,
+    date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_audits_workspace ON audits(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_findings_workspace ON findings(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_findings_audit ON findings(audit_id);
+  CREATE INDEX IF NOT EXISTS idx_risks_workspace ON risks(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_risks_audit ON risks(audit_id);
+  CREATE INDEX IF NOT EXISTS idx_evidence_workspace ON evidence(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_evidence_audit ON evidence(audit_id);
 `);
 
 export default db;

@@ -721,7 +721,7 @@ function PlanRow({
 
   const statusClass =
     plan.status === "Active"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : plan.status === "Completed"
         ? "bg-blue-50 text-blue-700"
         : plan.status === "Draft"
@@ -1002,7 +1002,7 @@ function AuditPlanModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1134,3 +1134,4 @@ function getInitials(name: string) {
       .toUpperCase() || "NA"
   );
 }
+export const dynamic = 'force-dynamic';

@@ -6,38 +6,21 @@ import {
   useContext,
   useMemo,
   useState,
+  useEffect,
   type ReactNode,
 } from "react";
 
 export type Workspace = {
   id: string;
   name: string;
-  description: string;
+  description?: string;
+  role?: string;
 };
-
-const INITIAL_WORKSPACES: Workspace[] = [
-  {
-    id: "abc-technologies",
-    name: "ABC Technologies",
-    description: "Information Security Audit Management",
-  },
-  {
-    id: "xyz-finance",
-    name: "XYZ Finance",
-    description: "Financial Services Information Security",
-  },
-  {
-    id: "pqr-healthcare",
-    name: "PQR Healthcare",
-    description: "Healthcare HIPAA & Security Audits",
-  },
-];
 
 type WorkspaceContextType = {
   workspaces: Workspace[];
   currentWorkspace: Workspace;
   setWorkspace: (id: string) => void;
-  addWorkspace: (workspace: { name: string; description: string; id?: string }) => Workspace;
 };
 
 const WorkspaceContext = createContext<
@@ -45,31 +28,17 @@ const WorkspaceContext = createContext<
 >(undefined);
 
 const STORAGE_KEY = "audit-platform-workspace";
-const WORKSPACES_STORAGE_KEY = "audit-platform-workspaces-list";
 
 export function WorkspaceProvider({
   children,
+  initialWorkspaces = [],
 }: {
   children: ReactNode;
+  initialWorkspaces?: Workspace[];
 }) {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
-    if (typeof window === "undefined") return INITIAL_WORKSPACES;
-    try {
-      const stored = window.localStorage.getItem(WORKSPACES_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return INITIAL_WORKSPACES;
-  });
-
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return INITIAL_WORKSPACES[0].id;
+    if (typeof window === "undefined") return null;
+    
     try {
       const savedWorkspace = window.localStorage.getItem(STORAGE_KEY);
       if (savedWorkspace) {
@@ -78,8 +47,23 @@ export function WorkspaceProvider({
     } catch {
       // ignore
     }
-    return INITIAL_WORKSPACES[0].id;
+    return initialWorkspaces.length > 0 ? initialWorkspaces[0].id : null;
   });
+
+  // Keep ID in sync if the initial list changes and the current ID is invalid
+  useEffect(() => {
+    if (initialWorkspaces.length > 0) {
+      if (!currentWorkspaceId || !initialWorkspaces.some(w => w.id === currentWorkspaceId)) {
+        const id = initialWorkspaces[0].id;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCurrentWorkspaceId(id);
+        window.localStorage.setItem(STORAGE_KEY, id);
+      }
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCurrentWorkspaceId(null);
+    }
+  }, [initialWorkspaces, currentWorkspaceId]);
 
   const setWorkspace = useCallback((id: string) => {
     setCurrentWorkspaceId(id);
@@ -88,49 +72,19 @@ export function WorkspaceProvider({
     }
   }, []);
 
-  const addWorkspace = useCallback((newWs: { name: string; description: string; id?: string }) => {
-    const slug =
-      newWs.id ||
-      newWs.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "") ||
-      `ws-${Date.now()}`;
+  const fallbackWorkspace: Workspace = { id: "", name: "Loading...", description: "" };
 
-    const created: Workspace = {
-      id: slug,
-      name: newWs.name,
-      description: newWs.description || "Security & Compliance Audits",
-    };
-
-    setWorkspaces((prev) => {
-      const updated = [...prev, created];
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(updated));
-      }
-      return updated;
-    });
-
-    setCurrentWorkspaceId(created.id);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, created.id);
-    }
-    return created;
-  }, []);
-
-  const currentWorkspace =
-    workspaces.find((w) => w.id === currentWorkspaceId) ??
-    workspaces[0] ??
-    INITIAL_WORKSPACES[0];
+  const currentWorkspace = currentWorkspaceId 
+    ? initialWorkspaces.find((w) => w.id === currentWorkspaceId) || fallbackWorkspace 
+    : fallbackWorkspace;
 
   const value = useMemo(
     () => ({
-      workspaces,
+      workspaces: initialWorkspaces,
       currentWorkspace,
       setWorkspace,
-      addWorkspace,
     }),
-    [workspaces, currentWorkspace, setWorkspace, addWorkspace]
+    [initialWorkspaces, currentWorkspace, setWorkspace]
   );
 
   return (
@@ -142,12 +96,10 @@ export function WorkspaceProvider({
 
 export function useWorkspace() {
   const context = useContext(WorkspaceContext);
-
   if (!context) {
     throw new Error(
       "useWorkspace must be used inside WorkspaceProvider"
     );
   }
-
   return context;
 }

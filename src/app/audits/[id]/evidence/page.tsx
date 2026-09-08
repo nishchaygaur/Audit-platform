@@ -1,6 +1,8 @@
 "use client";
+import { useParams } from "next/navigation";
+import { getEvidences } from "@/actions/evidence";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import {
   Plus,
@@ -324,8 +326,23 @@ export default function EvidencePage() {
 
   const workspaceId = currentWorkspace.id;
 
-  const [evidenceByWorkspace, setEvidenceByWorkspace] =
-    useState<Record<string, Evidence[]>>(INITIAL_EVIDENCE);
+  const [evidence, setEvidence] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const params = useParams();
+  
+  useEffect(() => {
+    if (workspaceId && params.id) {
+      getEvidences(workspaceId, params.id as string).then((res: any) => {
+        if (res.success && res.data) {
+          setEvidence(res.data.map((e: any) => ({...e, evidenceId: e.reference, uploadedBy: e.uploaded_by, uploaded: e.date})));
+        }
+        setLoading(false);
+      });
+    } else {
+      setEvidence([]);
+      setLoading(false);
+    }
+  }, [workspaceId, params.id]);
 
   const [search, setSearch] = useState("");
 
@@ -364,7 +381,7 @@ export default function EvidencePage() {
   const [formFileName, setFormFileName] = useState("");
   const [formSize, setFormSize] = useState("");
 
-  const evidence = evidenceByWorkspace[workspaceId] ?? [];
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading evidence...</div>;
 
   const filteredEvidence = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -1059,7 +1076,7 @@ function EvidenceRow({
 }) {
   const statusClass =
     evidence.status === "Approved"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : evidence.status === "Pending Review"
         ? "bg-amber-50 text-amber-700"
         : evidence.status === "Rejected"
@@ -1203,7 +1220,7 @@ function EvidenceRow({
               <button
                 type="button"
                 onClick={onApprove}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] textmerald-600 hover:bgmerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Approve
@@ -1438,7 +1455,7 @@ function EvidenceModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1584,7 +1601,7 @@ function EvidenceDetailsModal({
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+        <div className="flex justifynd border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1605,7 +1622,7 @@ function StatusBadge({
 }) {
   const statusClass =
     status === "Approved"
-      ? "bg-emerald-50 text-emerald-700"
+      ? "bgmerald-50 textmerald-700"
       : status === "Pending Review"
         ? "bg-amber-50 text-amber-700"
         : status === "Rejected"
@@ -1755,3 +1772,4 @@ function getInitials(name: string) {
       .toUpperCase() || "NA"
   );
 }
+export const dynamic = 'force-dynamic';

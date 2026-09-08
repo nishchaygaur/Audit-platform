@@ -1,6 +1,7 @@
 "use client";
+import { getRisks } from "@/actions/risks";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -303,6 +304,7 @@ export default function RiskManagementPage() {
     });
   }, [risks, search, levelFilter, statusFilter]);
 
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading risks...</div>;
   const critical = risks.filter((risk) => risk.level === "Critical").length;
   const high = risks.filter((risk) => risk.level === "High").length;
   const open = risks.filter((risk) => risk.status === "Open").length;
@@ -592,7 +594,7 @@ export default function RiskManagementPage() {
             </div>
           </div>
 
-          <div className="flex justify-end border-t border-slate-200 px-6 py-4">
+          <div className="flex justifynd border-t border-slate-200 px-6 py-4">
             <button
               onClick={() => setSelectedRisk(null)}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -697,7 +699,7 @@ export default function RiskManagementPage() {
             </FormField>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
             <button
               onClick={() => setShowAddModal(false)}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -781,7 +783,7 @@ function FilterSelect({
         ))}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
     </div>
   );
 }
@@ -814,7 +816,7 @@ function ScoreBadge({
     Critical: "bg-red-50 text-red-700 border-red-200",
     High: "bg-orange-50 text-orange-700 border-orange-200",
     Medium: "bg-amber-50 text-amber-700 border-amber-200",
-    Low: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    Low: "bgmerald-50 textmerald-700 bordermerald-200",
   };
 
   return (
@@ -831,7 +833,7 @@ function StatusBadge({ status }: { status: RiskStatus }) {
     Open: "bg-red-50 text-red-700",
     Mitigated: "bg-blue-50 text-blue-700",
     Accepted: "bg-amber-50 text-amber-700",
-    Closed: "bg-emerald-50 text-emerald-700",
+    Closed: "bgmerald-50 textmerald-700",
   };
 
   return (
@@ -917,3 +919,4 @@ function Modal({
     </div>
   );
 }
+export const dynamic = 'force-dynamic';
