@@ -54,103 +54,6 @@ import {
    FALLBACK AUDIT DATA
 ============================================================ */
 
-const auditData = {
-  "AUD-2024-001": {
-    id: "AUD-2024-001",
-    name: "ISO 27001 Internal Audit",
-    framework: "ISO 27001",
-    lead: "Alice Smith",
-    status: "In Progress",
-    progress: 68,
-    startDate: "01 May 2024",
-    dueDate: "12 Jun 2024",
-    objective:
-      "Assess the organization's Information Security Management System against ISO 27001 requirements and identify areas requiring improvement.",
-    scope:
-      "Information security management system, access control, asset management, supplier relationships, incident management and business continuity.",
-    controls: 114,
-    evidence: 86,
-    findings: 7,
-    risks: 3,
-  },
-
-  "AUD-2024-002": {
-    id: "AUD-2024-002",
-    name: "NIST CSF Assessment",
-    framework: "NIST CSF",
-    lead: "John Carter",
-    status: "In Review",
-    progress: 86,
-    startDate: "06 May 2024",
-    dueDate: "15 Jun 2024",
-    objective:
-      "Evaluate the organization's cybersecurity posture against the NIST Cybersecurity Framework.",
-    scope:
-      "Identify, Protect, Detect, Respond and Recover functions across the organization's information systems.",
-    controls: 108,
-    evidence: 94,
-    findings: 4,
-    risks: 2,
-  },
-
-  "AUD-2024-003": {
-    id: "AUD-2024-003",
-    name: "Vendor Risk Assessment",
-    framework: "ISO 27001",
-    lead: "Emily Davis",
-    status: "Not Started",
-    progress: 0,
-    startDate: "20 May 2024",
-    dueDate: "20 Jun 2024",
-    objective:
-      "Assess information-security risks associated with critical third-party suppliers.",
-    scope:
-      "Supplier security controls, contracts, data protection, access management and supplier monitoring.",
-    controls: 42,
-    evidence: 0,
-    findings: 0,
-    risks: 4,
-  },
-
-  "AUD-2024-004": {
-    id: "AUD-2024-004",
-    name: "Access Control Review",
-    framework: "NIST 800-53",
-    lead: "Michael Lee",
-    status: "Completed",
-    progress: 100,
-    startDate: "01 May 2024",
-    dueDate: "05 Jun 2024",
-    objective:
-      "Review logical and physical access controls and verify implementation against applicable security requirements.",
-    scope:
-      "Identity management, authentication, authorization, privileged access and account lifecycle management.",
-    controls: 58,
-    evidence: 58,
-    findings: 6,
-    risks: 1,
-  },
-
-  "AUD-2024-005": {
-    id: "AUD-2024-005",
-    name: "Risk Management Assessment",
-    framework: "NIST RMF",
-    lead: "Alice Smith",
-    status: "In Progress",
-    progress: 42,
-    startDate: "15 May 2024",
-    dueDate: "25 Jun 2024",
-    objective:
-      "Evaluate the organization's risk management process using the NIST Risk Management Framework.",
-    scope:
-      "Categorize, select, implement, assess, authorize and continuously monitor information systems.",
-    controls: 76,
-    evidence: 31,
-    findings: 3,
-    risks: 5,
-  },
-} as const;
-
 /* ============================================================
    CONTROL DATA
 ============================================================ */
@@ -429,16 +332,20 @@ export default function AuditDetailsPage() {
 
   const auditId = params.id;
 
-  const fallbackAudit =
-    auditData[auditId as keyof typeof auditData] ??
-    auditData["AUD-2024-001"];
-
-  const audit = (getAudit(auditId) ?? {
-    ...fallbackAudit,
-    workspace: "ABC Technologies",
-  }) as Audit;
+  const audit = getAudit(auditId);
 
   const [activeTab, setActiveTab] = useState("Overview");
+
+  if (!audit) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-slate-800">Audit Not Found</h2>
+          <p className="mt-2 text-slate-500">The audit you are looking for does not exist or you do not have permission to view it.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleStatusChange = (status: Audit["status"]) => {
     updateAudit(auditId, {
@@ -470,14 +377,14 @@ export default function AuditDetailsPage() {
 
   const statusClass =
     audit.status === "Completed"
-      ? "bgmerald-50 textmerald-700"
-      : audit.status === "In Review"
+      ? "bg-emerald-50 text-emerald-700"
+      : audit.status === "Review"
         ? "bg-blue-50 text-blue-700"
-        : audit.status === "Not Started"
+        : audit.status === "Planning"
           ? "bg-slate-100 text-slate-600"
-          : audit.status === "On Hold"
+          : audit.status === "Reporting"
             ? "bg-slate-100 text-slate-600"
-            : "bg-amber-50 text-amber-700";
+            : "bg-blue-50 text-blue-700";
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">
@@ -716,7 +623,7 @@ function OverviewPanel({ audit }: { audit: Audit }) {
                 initials="ED"
                 name="Emily Davis"
                 role="Auditor"
-                avatar="bgmerald-100 textmerald-700"
+                avatar="bg-emerald-100 text-emerald-700"
               />
             </div>
           </section>
@@ -929,7 +836,7 @@ function ControlsPanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Compliant"
           value={String(summary.compliant)}
-          className="textmerald-600"
+          className="text-emerald-600"
         />
 
         <ControlSummary
@@ -1105,8 +1012,8 @@ function ControlRow({
   status: string;
 }) {
   const statusStyles: Record<string, string> = {
-    Compliant: "bgmerald-50 textmerald-700",
-    "Partially Compliant": "bg-amber-50 text-amber-700",
+    Compliant: "bg-emerald-50 text-emerald-700",
+    "Partially Compliant": "bg-blue-50 text-blue-700",
     "Non-Compliant": "bg-red-50 text-red-700",
     "Under Review": "bg-blue-50 text-blue-700",
   };
@@ -1366,7 +1273,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Accepted"
           value={String(verifiedCount)}
-          className="textmerald-600"
+          className="text-emerald-600"
         />
         <ControlSummary
           label="Under Review"
@@ -1451,12 +1358,12 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                 <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                     item.status === "Accepted"
-                      ? "bgmerald-50 textmerald-700"
+                      ? "bg-emerald-50 text-emerald-700"
                       : item.status === "Under Review"
                       ? "bg-blue-50 text-blue-700"
                       : item.status === "Rejected"
                       ? "bg-red-50 text-red-700"
-                      : "bg-amber-50 text-amber-700"
+                      : "bg-blue-50 text-blue-700"
                   }`}
                 >
                   {item.status}
@@ -1948,7 +1855,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
                           : item.severity === "High"
                           ? "bg-orange-50 text-orange-700"
                           : item.severity === "Medium"
-                          ? "bg-amber-50 text-amber-700"
+                          ? "bg-blue-50 text-blue-700"
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
@@ -1974,7 +1881,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
                     <span
                       className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                         item.status === "Resolved" || item.status === "Closed"
-                          ? "bgmerald-50 textmerald-700"
+                          ? "bg-emerald-50 text-emerald-700"
                           : item.status === "In Progress"
                           ? "bg-blue-50 text-blue-700"
                           : item.status === "Accepted Risk"
@@ -2158,7 +2065,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
                         ? "bg-red-50 text-red-700"
                         : selectedFinding.severity === "High"
                         ? "bg-orange-50 text-orange-700"
-                        : "bg-amber-50 text-amber-700"
+                        : "bg-blue-50 text-blue-700"
                     }`}
                   >
                     {selectedFinding.severity}
@@ -2382,7 +2289,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Low"
           value={String(lowCount)}
-          className="textmerald-600"
+          className="text-emerald-600"
         />
       </div>
 
@@ -2424,8 +2331,8 @@ function RisksPanel({ audit }: { audit: Audit }) {
                       : item.level === "High"
                       ? "bg-orange-50 text-orange-700"
                       : item.level === "Medium"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bgmerald-50 textmerald-700"
+                      ? "bg-blue-50 text-blue-700"
+                      : "bg-emerald-50 text-emerald-700"
                   }`}
                 >
                   {item.level} ({item.score})
@@ -2796,7 +2703,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
         <ControlSummary
           label="Completed"
           value={String(completedCount)}
-          className="textmerald-600"
+          className="text-emerald-600"
         />
       </div>
 
@@ -2848,7 +2755,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
                 <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
                     item.status === "Completed"
-                      ? "bgmerald-50 textmerald-700"
+                      ? "bg-emerald-50 text-emerald-700"
                       : item.status === "In Progress"
                       ? "bg-blue-50 text-blue-700"
                       : "bg-red-50 text-red-700"
@@ -3278,7 +3185,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="rounded-full bgmerald-50 px-2.5 py-1 text-[10px] font-medium textmerald-700">
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700">
                     {item.status}
                   </span>
                   <button
@@ -3422,7 +3329,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Controls Evaluated</span>
                   <p className="text-[16px] font-semibold text-slate-900">{audit.controls}</p>
-                  <p className="text-[10px] textmerald-600 mt-0.5">Compliant: ~65%</p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Compliant: ~65%</p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Evidence Collected</span>

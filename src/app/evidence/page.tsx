@@ -414,7 +414,7 @@ export default function EvidencePage() {
               }
               label="Accepted"
               value={String(acceptedEvidence)}
-              valueClass="textmerald-600"
+              valueClass="text-emerald-600"
             />
 
             <SummaryCard
@@ -822,7 +822,7 @@ function EvidenceRow({
 }) {
   const statusClass =
     item.status === "Accepted"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : item.status === "Under Review"
         ? "bg-blue-50 text-blue-700"
         : item.status === "Pending Review"
@@ -920,7 +920,7 @@ function EvidenceRow({
               <button
                 type="button"
                 onClick={onAccept}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] textmerald-600 hover:bgmerald-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Accept Evidence
@@ -1264,7 +1264,7 @@ function EvidenceDetails({
 }) {
   const statusClass =
     item.status === "Accepted"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : item.status === "Rejected"
         ? "bg-red-50 text-red-700"
         : item.status === "Under Review"

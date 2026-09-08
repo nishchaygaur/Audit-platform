@@ -573,7 +573,7 @@ export default function FrameworksPage() {
               }
               label="Active"
               value={String(activeFrameworks)}
-              valueClass="textmerald-600"
+              valueClass="text-emerald-600"
             />
 
             <SummaryCard
@@ -641,7 +641,7 @@ export default function FrameworksPage() {
                   }
                   className={`rounded-md px-3 py-2 text-[10px] font-medium ${
                     statusFilter === "Active"
-                      ? "bgmerald-50 textmerald-700"
+                      ? "bg-emerald-50 text-emerald-700"
                       : "text-slate-400 hover:bg-slate-50"
                   }`}
                 >
@@ -921,7 +921,7 @@ export default function FrameworksPage() {
 
                           {control.status ===
                           "Mapped" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bgmerald-50 px-2 py-1 text-[8px] font-medium textmerald-700">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-medium text-emerald-700">
                               <Check className="h-3 w-3" />
                               Mapped
                             </span>
@@ -1259,7 +1259,7 @@ function FrameworkRow({
             </h3>
 
             {active ? (
-              <span className="rounded-full bgmerald-50 px-2 py-0.5 text-[8px] font-medium textmerald-700">
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] font-medium text-emerald-700">
                 Active
               </span>
             ) : (

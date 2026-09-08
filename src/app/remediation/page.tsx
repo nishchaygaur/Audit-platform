@@ -803,7 +803,7 @@ function SummaryCard({
             danger
               ? "bg-red-50 text-red-600"
               : success
-              ? "bgmerald-50 textmerald-600"
+              ? "bg-emerald-50 text-emerald-600"
               : "bg-slate-100 text-slate-600"
           }`}
         >
@@ -853,7 +853,7 @@ function PriorityBadge({ priority }: { priority: Priority }) {
     Critical: "bg-red-50 text-red-700",
     High: "bg-orange-50 text-orange-700",
     Medium: "bg-amber-50 text-amber-700",
-    Low: "bgmerald-50 textmerald-700",
+    Low: "bg-emerald-50 text-emerald-700",
   };
 
   return (
@@ -874,7 +874,7 @@ function StatusBadge({
     Open: "bg-red-50 text-red-700",
     "In Progress": "bg-blue-50 text-blue-700",
     "Pending Review": "bg-amber-50 text-amber-700",
-    Completed: "bgmerald-50 textmerald-700",
+    Completed: "bg-emerald-50 text-emerald-700",
     Overdue: "bg-red-50 text-red-700",
   };
 

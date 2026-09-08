@@ -45,15 +45,16 @@ export async function getWorkspaceMembers(workspaceId: string) {
 
   return members as { id: string; name: string; email: string; role: string }[];
 }
-import { hasPermission } from "@/lib/rbac";
-import { requirePermission } from "@/lib/server-rbac";
+import { hasPermission, type Role } from "@/lib/rbac";
+import { requirePermission, requireRoleManagement } from "@/lib/server-rbac";
 
 export async function addWorkspaceMember(workspaceId: string, email: string, role: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-
-  const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(session.user.id, workspaceId) as { role: string } | undefined;
-  if (!membership || !hasPermission(membership.role as any, "workspace.manage")) return { error: "Permission denied" };
+  if (!workspaceId) return { error: "Unauthorized" };
+  try {
+    await requireRoleManagement(role as Role, workspaceId);
+  } catch (err: any) {
+    return { error: err.message };
+  }
 
   const user = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email) as { id: string } | undefined;
   if (!user) return { error: "User not found. Ask them to sign up first." };
@@ -70,13 +71,22 @@ export async function addWorkspaceMember(workspaceId: string, email: string, rol
 }
 
 export async function updateWorkspaceMember(workspaceId: string, userId: string, role: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
+  if (!workspaceId) return { error: "Unauthorized" };
+  let auth;
+  try {
+    auth = await requireRoleManagement(role as Role, workspaceId);
+  } catch (err: any) {
+    return { error: err.message };
+  }
 
-  const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(session.user.id, workspaceId) as { role: string } | undefined;
-  if (!membership || !hasPermission(membership.role as any, "workspace.manage")) return { error: "Permission denied" };
+  if (userId === auth.user.id) return { error: "Cannot change your own role" };
 
-  if (userId === session.user.id) return { error: "Cannot change your own role" };
+  const targetMembership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
+  if (!targetMembership) return { error: "User is not in this workspace" };
+
+  if (targetMembership.role === "Owner" && auth.role !== "Owner") {
+    return { error: "Permission denied: Only Owners can modify Owner roles" };
+  }
 
   try {
     db.prepare(`UPDATE user_workspaces SET role = ? WHERE user_id = ? AND workspace_id = ?`).run(role, userId, workspaceId);
@@ -87,13 +97,22 @@ export async function updateWorkspaceMember(workspaceId: string, userId: string,
 }
 
 export async function removeWorkspaceMember(workspaceId: string, userId: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
+  if (!workspaceId) return { error: "Unauthorized" };
+  let auth;
+  try {
+    auth = await requirePermission("workspace.manage", workspaceId);
+  } catch (err: any) {
+    return { error: err.message };
+  }
 
-  const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(session.user.id, workspaceId) as { role: string } | undefined;
-  if (!membership || !hasPermission(membership.role as any, "workspace.manage")) return { error: "Permission denied" };
+  if (userId === auth.user.id) return { error: "Cannot remove yourself" };
 
-  if (userId === session.user.id) return { error: "Cannot remove yourself" };
+  const targetMembership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
+  if (!targetMembership) return { error: "User is not in this workspace" };
+
+  if (targetMembership.role === "Owner" && auth.role !== "Owner") {
+    return { error: "Permission denied: Only Owners can remove Owners" };
+  }
 
   try {
     db.prepare(`DELETE FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).run(userId, workspaceId);

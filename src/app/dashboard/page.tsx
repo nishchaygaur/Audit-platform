@@ -398,12 +398,12 @@ const severityStyles: Record<Severity, string> = {
   Critical: "bg-red-500",
   High: "bg-orange-500",
   Medium: "bg-amber-400",
-  Low: "bgmerald-500",
+  Low: "bg-emerald-500",
 };
 
 function statusClass(status: AuditStatus) {
   if (status === "Completed") {
-    return "bgmerald-50 textmerald-700";
+    return "bg-emerald-50 text-emerald-700";
   }
 
   if (status === "In Review") {
@@ -431,8 +431,8 @@ function ActivityIcon({ type }: { type: ActivityItem["icon"] }) {
     },
     audit: {
       icon: ClipboardCheck,
-      bg: "bgmerald-50",
-      text: "textmerald-600",
+      bg: "bg-emerald-50",
+      text: "text-emerald-600",
     },
     risk: {
       icon: ShieldAlert,
@@ -524,7 +524,7 @@ function StatCard({
 
       <div
         className={`mt-5 flex items-center gap-1 text-[10px] ${
-          positive ? "textmerald-600" : "text-red-500"
+          positive ? "text-emerald-600" : "text-red-500"
         }`}
       >
         {positive ? (
@@ -684,9 +684,9 @@ export default function DashboardPage() {
               change="27%"
               positive
               icon={
-                <CheckCircle2 className="h-6 w-6 textmerald-600" />
+                <CheckCircle2 className="h-6 w-6 text-emerald-600" />
               }
-              iconBg="bgmerald-50"
+              iconBg="bg-emerald-50"
             />
           </div>
 
@@ -749,7 +749,7 @@ export default function DashboardPage() {
                     label="Completed"
                     value={auditStatusCounts.Completed}
                     total={totalAudits}
-                    dot="bgmerald-600"
+                    dot="bg-emerald-600"
                   />
                 </div>
               </div>
@@ -826,7 +826,7 @@ export default function DashboardPage() {
                     label="Effective"
                     value={data.controls.effective}
                     total={data.controls.total}
-                    dot="bgmerald-500"
+                    dot="bg-emerald-500"
                   />
                   <MetricRow
                     label="Partially Effective"
@@ -857,7 +857,7 @@ export default function DashboardPage() {
                 {
                   label: "Completed",
                   value: data.remediation.completed,
-                  color: "bgmerald-500",
+                  color: "bg-emerald-500",
                 },
                 {
                   label: "In Progress",
@@ -874,15 +874,15 @@ export default function DashboardPage() {
 
             <ProgressPanel
               title="Evidence Coverage"
-              icon={<FileCheck2 className="h-5 w-5 textmerald-600" />}
-              iconBg="bgmerald-50"
+              icon={<FileCheck2 className="h-5 w-5 text-emerald-600" />}
+              iconBg="bg-emerald-50"
               percentage={evidenceRate}
               mainLabel={`${data.evidence.approved} of ${data.evidence.total} approved`}
               rows={[
                 {
                   label: "Approved",
                   value: data.evidence.approved,
-                  color: "bgmerald-500",
+                  color: "bg-emerald-500",
                 },
                 {
                   label: "Pending Review",
@@ -929,7 +929,7 @@ export default function DashboardPage() {
                 {
                   label: "Low",
                   value: data.risks.low,
-                  color: "bgmerald-500",
+                  color: "bg-emerald-500",
                 },
               ]}
             />
@@ -1299,7 +1299,7 @@ function HealthMetric({
         </div>
 
         {positive ? (
-          <CheckCircle2 className="h-4 w-4 textmerald-500" />
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
         ) : (
           <AlertTriangle className="h-4 w-4 text-amber-500" />
         )}
@@ -1307,7 +1307,7 @@ function HealthMetric({
 
       <p
         className={`mt-3 text-[9px] font-semibold ${
-          positive ? "textmerald-600" : "text-amber-600"
+          positive ? "text-emerald-600" : "text-amber-600"
         }`}
       >
         {status}

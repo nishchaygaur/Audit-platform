@@ -199,7 +199,7 @@ const frameworks = [
 function StatusBadge({ status }: { status: ReportStatus }) {
   if (status === "Completed") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bgmerald-50 px-2.5 py-1 text-xs font-medium textmerald-700">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
         <CheckCircle2 size={13} />
         Completed
       </span>

@@ -426,7 +426,7 @@ export default function RisksPage() {
               <Summary
                 label="Low"
                 value={String(low)}
-                valueClass="textmerald-600"
+                valueClass="text-emerald-600"
               />
             </div>
 
@@ -859,11 +859,11 @@ function RiskRow({
         ? "bg-red-50 text-red-700"
         : risk.level === "Medium"
           ? "bg-amber-50 text-amber-700"
-          : "bgmerald-50 textmerald-700";
+          : "bg-emerald-50 text-emerald-700";
 
   const statusClass =
     risk.status === "Closed"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : risk.status === "Accepted"
         ? "bg-slate-100 text-slate-600"
         : risk.status === "In Treatment"
@@ -995,7 +995,7 @@ function RiskDetailModal({
         ? "bg-red-50 text-red-700"
         : risk.level === "Medium"
           ? "bg-amber-50 text-amber-700"
-          : "bgmerald-50 textmerald-700";
+          : "bg-emerald-50 text-emerald-700";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4">

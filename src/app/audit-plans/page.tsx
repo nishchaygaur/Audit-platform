@@ -721,7 +721,7 @@ function PlanRow({
 
   const statusClass =
     plan.status === "Active"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : plan.status === "Completed"
         ? "bg-blue-50 text-blue-700"
         : plan.status === "Draft"

@@ -160,7 +160,7 @@ const FRAMEWORK_CONTROLS: Record<string, FrameworkControl[]> = {
 //     name: "Vendor Risk Assessment",
 //     framework: "ISO 27001",
 //     lead: "Emily Davis",
-//     status: "Not Started",
+//     status: "Planning",
 //     progress: 0,
 //     startDate: "20 May 2024",
 //     dueDate: "20 Jun 2024",
@@ -278,15 +278,15 @@ const FRAMEWORK_CONTROLS: Record<string, FrameworkControl[]> = {
 function getStatusClass(status: string) {
   switch (status) {
     case "Completed":
-      return "bgmerald-50 textmerald-700";
+      return "bg-emerald-50 text-emerald-700";
 
-    case "In Review":
+    case "Review":
       return "bg-blue-50 text-blue-700";
 
     case "Not Started":
       return "bg-slate-100 text-slate-600";
 
-    case "In Progress":
+    case "Fieldwork":
       return "bg-amber-50 text-amber-700";
 
     default:
@@ -409,10 +409,10 @@ export default function AuditsPage() {
     return {
       total: workspaceAudits.length,
       inProgress: workspaceAudits.filter(
-        (audit) => audit.status === "In Progress",
+        (audit) => audit.status === "Fieldwork",
       ).length,
       review: workspaceAudits.filter(
-        (audit) => audit.status === "In Review",
+        (audit) => audit.status === "Review",
       ).length,
       completed: workspaceAudits.filter(
         (audit) => audit.status === "Completed",
@@ -455,7 +455,7 @@ export default function AuditsPage() {
       name: newAudit.name.trim(),
       framework: newAudit.framework,
       lead: newAudit.lead,
-      status: "Planned",
+      status: "Planning",
       progress: 0,
       startDate: newAudit.startDate || new Date().toISOString().split("T")[0],
       dueDate: newAudit.dueDate || "30 days from now",
@@ -523,7 +523,7 @@ export default function AuditsPage() {
               </p>
             </div>
 
-            {hasPermission(workspace.currentWorkspace?.role || user?.role, "audits.create") && (
+            {hasPermission(workspace.currentWorkspace?.role, "audits.create") && (
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -551,7 +551,7 @@ export default function AuditsPage() {
             />
 
             <SummaryCard
-              label="In Progress"
+              label="Fieldwork"
               value={stats.inProgress}
               icon={
                 <Clock3 className="h-4 w-4 text-amber-600" />
@@ -559,7 +559,7 @@ export default function AuditsPage() {
             />
 
             <SummaryCard
-              label="In Review"
+              label="Review"
               value={stats.review}
               icon={
                 <FileText className="h-4 w-4 text-violet-600" />
@@ -570,7 +570,7 @@ export default function AuditsPage() {
               label="Completed"
               value={stats.completed}
               icon={
-                <CheckCircle2 className="h-4 w-4 textmerald-600" />
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               }
             />
 
@@ -608,7 +608,7 @@ export default function AuditsPage() {
                     "All Statuses",
                     "In Progress",
                     "In Review",
-                    "Not Started",
+                    "Planning",
                     "Completed",
                   ]}
                   onChange={setStatusFilter}
@@ -983,12 +983,12 @@ export default function AuditsPage() {
                         isCurrent
                           ? "bg-blue-50 text-blue-700 border border-blue-200"
                           : isCompleted
-                          ? "bgmerald-50 textmerald-700 border bordermerald-100"
+                          ? "bg-emerald-50 text-emerald-700 border bordermerald-100"
                           : "bg-slate-50 text-slate-400 border border-slate-100"
                       }`}
                     >
                       {isCompleted ? (
-                        <Check className="h-3 w-3 textmerald-600" />
+                        <Check className="h-3 w-3 text-emerald-600" />
                       ) : (
                         <span className="h-3 w-3 rounded-full border border-current text-[8px] flex items-center justify-center">
                           {item.step}
@@ -1288,14 +1288,14 @@ export default function AuditsPage() {
                       </p>
                     </div>
 
-                    <div className="rounded-lg border bordermerald-200 bgmerald-50/40 p-3.5">
-                      <div className="flex items-center gap-2 textmerald-800">
-                        <Sparkles className="h-4 w-4 textmerald-600" />
+                    <div className="rounded-lg border bordermerald-200 bg-emerald-50/40 p-3.5">
+                      <div className="flex items-center gap-2 text-emerald-800">
+                        <Sparkles className="h-4 w-4 text-emerald-600" />
                         <span className="text-[12px] font-semibold">
                           Automated Evidence Seeding
                         </span>
                       </div>
-                      <p className="mt-1.5 text-[11px] textmerald-900/80">
+                      <p className="mt-1.5 text-[11px] text-emerald-900/80">
                         {selectedControlIds.length} initial evidence placeholders will be auto-generated in &apos;Pending Review&apos; status ready for auditor inspection.
                       </p>
                     </div>

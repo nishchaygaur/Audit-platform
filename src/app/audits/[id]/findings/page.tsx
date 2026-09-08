@@ -883,7 +883,7 @@ function FindingRow({
       : finding.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : finding.status === "Resolved"
-          ? "bgmerald-50 textmerald-700"
+          ? "bg-emerald-50 text-emerald-700"
           : finding.status === "Accepted"
             ? "bg-violet-50 text-violet-700"
             : "bg-slate-100 text-slate-500";

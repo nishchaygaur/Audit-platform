@@ -13,12 +13,11 @@ import { useWorkspace } from "./WorkspaceContext";
 import { getAudits, createAudit, updateAudit, deleteAudit } from "@/actions/audits";
 
 export type AuditStatus =
-  | "Planned"
-  | "Not Started"
-  | "In Progress"
-  | "In Review"
-  | "Completed"
-  | "On Hold";
+  | "Planning"
+  | "Fieldwork"
+  | "Review"
+  | "Reporting"
+  | "Completed";
 
 export type Audit = {
   id: string;
@@ -59,30 +58,54 @@ export function AuditProvider({ children }: { children: ReactNode }) {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentWorkspace } = useWorkspace();
+  const workspaceId = currentWorkspace?.id;
 
   const refreshAudits = useCallback(async () => {
-    if (!currentWorkspace?.id) {
+    if (!workspaceId) {
       setAudits([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const res = await getAudits(currentWorkspace.id);
+    const res = await getAudits(workspaceId);
     if (res.success && res.data) {
-      // Map to fit the format, maybe `start_date` to `startDate`
-      const mapped = (res.data as Record<string, unknown>[]).map(a => ({
+      const mapped = (res.data as Record<string, unknown>[]).map((a) => ({
         ...a,
-        startDate: a.start_date,
-        dueDate: a.due_date
+        startDate: a.start_date as string,
+        dueDate: a.due_date as string,
       }));
       setAudits(mapped as Audit[]);
     }
     setLoading(false);
-  }, [currentWorkspace?.id]);
+  }, [workspaceId]);
 
   useEffect(() => {
-    refreshAudits();
-  }, [refreshAudits]);
+    let ignore = false;
+    async function load() {
+      if (!workspaceId) {
+        setAudits([]);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      const res = await getAudits(workspaceId);
+      if (!ignore) {
+        if (res.success && res.data) {
+          const mapped = (res.data as Record<string, unknown>[]).map((a) => ({
+            ...a,
+            startDate: a.start_date as string,
+            dueDate: a.due_date as string,
+          }));
+          setAudits(mapped as Audit[]);
+        }
+        setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      ignore = true;
+    };
+  }, [workspaceId]);
 
   const getAuditSync = useCallback(
     (auditId: string) => {
@@ -93,37 +116,37 @@ export function AuditProvider({ children }: { children: ReactNode }) {
 
   const addAuditAsync = useCallback(
     async (audit: NewAudit) => {
-      if (!currentWorkspace?.id) return;
-      const res = await createAudit(currentWorkspace.id, audit);
+      if (!workspaceId) return;
+      const res = await createAudit(workspaceId, audit);
       if (res.success) {
         await refreshAudits();
         return res.data as Audit;
       }
       return undefined;
     },
-    [currentWorkspace, refreshAudits]
+    [workspaceId, refreshAudits]
   );
 
   const updateAuditAsync = useCallback(
     async (auditId: string, updates: Partial<Audit>) => {
-      if (!currentWorkspace?.id) return;
-      const res = await updateAudit(currentWorkspace.id, auditId, updates);
+      if (!workspaceId) return;
+      const res = await updateAudit(workspaceId, auditId, updates);
       if (res.success) {
         await refreshAudits();
       }
     },
-    [currentWorkspace, refreshAudits]
+    [workspaceId, refreshAudits]
   );
 
   const deleteAuditAsync = useCallback(
     async (auditId: string) => {
-      if (!currentWorkspace?.id) return;
-      const res = await deleteAudit(currentWorkspace.id, auditId);
+      if (!workspaceId) return;
+      const res = await deleteAudit(workspaceId, auditId);
       if (res.success) {
         await refreshAudits();
       }
     },
-    [currentWorkspace, refreshAudits]
+    [workspaceId, refreshAudits]
   );
 
   const value = useMemo(

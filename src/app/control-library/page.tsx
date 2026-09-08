@@ -527,7 +527,7 @@ export default function ControlLibraryPage() {
             <SummaryCard
               label="Mapped"
               value={String(mappedCount)}
-              valueClass="textmerald-600"
+              valueClass="text-emerald-600"
               icon={
                 <Check className="h-4 w-4" />
               }
@@ -745,7 +745,7 @@ export default function ControlLibraryPage() {
                       <td className="px-4 py-4 align-top">
 
                         {control.status === "Mapped" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bgmerald-50 px-2 py-1 text-[8px] font-medium textmerald-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-medium text-emerald-700">
                             <Check className="h-3 w-3" />
                             Mapped
                           </span>

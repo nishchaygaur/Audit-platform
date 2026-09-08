@@ -91,7 +91,7 @@ export default function FindingDetailsPage() {
   if (!finding) return null;
 
   const severityClass = finding.severity === "Critical" ? "bg-red-50 text-red-700" : finding.severity === "High" ? "bg-orange-50 text-orange-700" : finding.severity === "Medium" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600";
-  const statusClass = currentStatus === "Open" ? "bg-red-50 text-red-700" : currentStatus === "In Progress" ? "bg-blue-50 text-blue-700" : currentStatus === "Resolved" ? "bgmerald-50 textmerald-700" : currentStatus === "Accepted" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-600";
+  const statusClass = currentStatus === "Open" ? "bg-red-50 text-red-700" : currentStatus === "In Progress" ? "bg-blue-50 text-blue-700" : currentStatus === "Resolved" ? "bg-emerald-50 text-emerald-700" : currentStatus === "Accepted" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-600";
 
   function addComment() {
     if (!comment.trim()) return;
@@ -165,7 +165,7 @@ export default function FindingDetailsPage() {
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600"><FileCheck2 className="h-4 w-4" /></div>
                         <div className="min-w-0"><p className="truncate text-[11px] font-medium text-slate-700">{item.name}</p><p className="mt-0.5 text-[9px] text-slate-400">{item.ref} · {item.type} · {item.date}</p></div>
                       </div>
-                      <span className="ml-3 rounded-full bgmerald-50 px-2.5 py-1 text-[9px] font-medium textmerald-700">{item.status}</span>
+                      <span className="ml-3 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-medium text-emerald-700">{item.status}</span>
                     </div>
                   ))}
                 </div>

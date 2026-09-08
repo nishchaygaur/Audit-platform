@@ -391,7 +391,7 @@ export default function Sidebar() {  const { user } = useAuth();
           </div>
 
           {/* Administration */}
-          {hasPermission(currentWorkspace?.role || user?.role, "workspace.manage") && (
+          {hasPermission(currentWorkspace?.role, "workspace.manage") && (
             <Link
               href="/administration"
               id="sidebar-nav-administration"
@@ -457,7 +457,7 @@ export default function Sidebar() {  const { user } = useAuth();
 
             <div className="min-w-0 flex-1 text-left leading-tight">
               <div className="truncate text-[12.5px] font-medium text-slate-100">{user?.name || "Unknown User"}</div>
-              <div className="truncate text-[10.5px] text-slate-400">{currentWorkspace?.role || user?.role || "Viewer"}</div>
+              <div className="truncate text-[10.5px] text-slate-400">{currentWorkspace?.role || "Viewer"}</div>
             </div>
 
             <ChevronDown
@@ -480,7 +480,7 @@ export default function Sidebar() {  const { user } = useAuth();
                 </p>
                 <div className="mt-1 flex items-center gap-1.5">
                   <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
-                    {currentWorkspace?.role || user?.role || "Viewer"}
+                    {currentWorkspace?.role || "Viewer"}
                   </span>
                 </div>
               </div>

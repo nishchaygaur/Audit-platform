@@ -562,7 +562,7 @@ export default function FindingsPage() {
               }
               label="Resolved"
               value={String(resolvedFindings)}
-              valueClass="textmerald-600"
+              valueClass="text-emerald-600"
             />
           </div>
 
@@ -1045,7 +1045,7 @@ function FindingRow({
   const statusClass =
     item.status === "Resolved" ||
     item.status === "Closed"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : item.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : item.status === "Accepted Risk"
@@ -1194,7 +1194,7 @@ function FindingRow({
               <button
                 type="button"
                 onClick={onResolve}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] textmerald-600 hover:bgmerald-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Mark Resolved
@@ -1639,7 +1639,7 @@ function FindingDetails({
   const statusClass =
     item.status === "Resolved" ||
     item.status === "Closed"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : item.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : item.status === "Accepted Risk"

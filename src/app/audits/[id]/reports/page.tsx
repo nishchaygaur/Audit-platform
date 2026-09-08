@@ -193,7 +193,7 @@ const STATUS_OPTIONS: Array<ReportStatus | "All Statuses"> = [
 function statusClasses(status: ReportStatus) {
   switch (status) {
     case "Completed":
-      return "bgmerald-50 textmerald-700";
+      return "bg-emerald-50 text-emerald-700";
     case "Generating":
       return "bg-blue-50 text-blue-700";
     case "Draft":
@@ -512,9 +512,9 @@ export default function ReportsPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a94a6]">
                   Completed
                 </p>
-                <CheckCircle2 size={18} className="textmerald-500" />
+                <CheckCircle2 size={18} className="text-emerald-500" />
               </div>
-              <p className="text-[25px] font-bold textmerald-600">
+              <p className="text-[25px] font-bold text-emerald-600">
                 {completed}
               </p>
               <p className="mt-1 text-[11px] text-[#94a3b8]">
@@ -698,10 +698,10 @@ export default function ReportsPage() {
             </div>
 
             <div className="rounded-xl border border-[#e5e9f0] bg-white p-5">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bgmerald-50">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50">
                 <CheckCircle2
                   size={17}
-                  className="textmerald-600"
+                  className="text-emerald-600"
                 />
               </div>
               <h3 className="text-[13px] font-semibold">
@@ -918,7 +918,7 @@ export default function ReportsPage() {
                   <p className="text-[10px] uppercase text-[#8a94a6]">
                     Evidence
                   </p>
-                  <p className="mt-1 text-[20px] font-bold textmerald-600">
+                  <p className="mt-1 text-[20px] font-bold text-emerald-600">
                     {selectedReport.evidence}
                   </p>
                 </div>

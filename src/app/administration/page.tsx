@@ -81,7 +81,7 @@ export default function AdministrationPage() {
   const { currentWorkspace } = useWorkspace();
 
   useEffect(() => {
-    if (!loading && (!user || !hasPermission(currentWorkspace?.role || user?.role, "workspace.manage"))) {
+    if (!loading && (!user || !hasPermission(currentWorkspace?.role, "workspace.manage"))) {
       router.replace("/dashboard");
     }
   }, [user, loading, router, currentWorkspace]);

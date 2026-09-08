@@ -1057,7 +1057,7 @@ function EvidenceRow({
 }) {
   const statusClass =
     evidence.status === "Approved"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : evidence.status === "Pending Review"
         ? "bg-amber-50 text-amber-700"
         : evidence.status === "Rejected"
@@ -1201,7 +1201,7 @@ function EvidenceRow({
               <button
                 type="button"
                 onClick={onApprove}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] textmerald-600 hover:bgmerald-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Approve
@@ -1603,7 +1603,7 @@ function StatusBadge({
 }) {
   const statusClass =
     status === "Approved"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : status === "Pending Review"
         ? "bg-amber-50 text-amber-700"
         : status === "Rejected"

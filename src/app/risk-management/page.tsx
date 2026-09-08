@@ -815,7 +815,7 @@ function ScoreBadge({
     Critical: "bg-red-50 text-red-700 border-red-200",
     High: "bg-orange-50 text-orange-700 border-orange-200",
     Medium: "bg-amber-50 text-amber-700 border-amber-200",
-    Low: "bgmerald-50 textmerald-700 bordermerald-200",
+    Low: "bg-emerald-50 text-emerald-700 bordermerald-200",
   };
 
   return (
@@ -832,7 +832,7 @@ function StatusBadge({ status }: { status: RiskStatus }) {
     Open: "bg-red-50 text-red-700",
     Mitigated: "bg-blue-50 text-blue-700",
     Accepted: "bg-amber-50 text-amber-700",
-    Closed: "bgmerald-50 textmerald-700",
+    Closed: "bg-emerald-50 text-emerald-700",
   };
 
   return (

@@ -322,7 +322,7 @@ export default function RemediationPage() {
               <Summary
                 label="Completed"
                 value={String(completed)}
-                valueClass="textmerald-600"
+                valueClass="text-emerald-600"
               />
             </div>
 
@@ -758,7 +758,7 @@ function RemediationRow({
 
   const statusClass =
     item.status === "Completed"
-      ? "bgmerald-50 textmerald-700"
+      ? "bg-emerald-50 text-emerald-700"
       : item.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
         : "bg-orange-50 text-orange-700";
@@ -773,7 +773,7 @@ function RemediationRow({
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50">
             {item.status === "Completed" ? (
-              <CheckCircle2 className="h-4 w-4 textmerald-600" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             ) : (
               <Wrench className="h-4 w-4 text-blue-600" />
             )}
