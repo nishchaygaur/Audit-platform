@@ -1,8 +1,14 @@
 "use client";
 import { useParams } from "next/navigation";
-import { getEvidences } from "@/actions/evidence";
+import {
+  getEvidences,
+  createEvidence,
+  updateEvidence,
+  deleteEvidence as deleteEvidenceAction,
+  type EvidenceRecord,
+} from "@/actions/evidence";
 import type { ReactNode } from "react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 
 import {
   Plus,
@@ -30,11 +36,11 @@ import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
 type EvidenceStatus =
-  | "Pending Review"
-  | "Approved"
-  | "Rejected"
-  | "Expired"
-  | "Archived";
+  | "Requested"
+  | "Submitted"
+  | "Under Review"
+  | "Accepted"
+  | "Rejected";
 
 type EvidenceType =
   | "Document"
@@ -46,7 +52,7 @@ type EvidenceType =
   | "Other";
 
 type Evidence = {
-  id: number;
+  id: string;
   reference: string;
   name: string;
   description: string;
@@ -73,11 +79,11 @@ const EVIDENCE_TYPES: EvidenceType[] = [
 ];
 
 const STATUS_OPTIONS: EvidenceStatus[] = [
-  "Pending Review",
-  "Approved",
+  "Requested",
+  "Submitted",
+  "Under Review",
+  "Accepted",
   "Rejected",
-  "Expired",
-  "Archived",
 ];
 
 const FRAMEWORKS = [
@@ -89,260 +95,62 @@ const FRAMEWORKS = [
   "CIS Controls",
 ];
 
-const INITIAL_EVIDENCE: Record<string, Evidence[]> = {
-  "abc-technologies": [
-    {
-      id: 1,
-      reference: "EV-0001",
-      name: "Information Security Policy",
-      description:
-        "Approved information security policy demonstrating the organisation's security governance requirements.",
-      type: "Policy",
-      framework: "ISO 27001",
-      control: "A.5.1",
-      audit: "2024 Information Security Audit Plan",
-      owner: "Alice Smith",
-      collectedDate: "05 May 2024",
-      reviewDate: "05 May 2025",
-      status: "Approved",
-      fileName: "information-security-policy.pdf",
-      size: "1.8 MB",
-    },
-    {
-      id: 2,
-      reference: "EV-0002",
-      name: "User Access Review Report",
-      description:
-        "Quarterly user access review showing validation of active accounts and access privileges.",
-      type: "Report",
-      framework: "ISO 27001",
-      control: "A.5.15",
-      audit: "2024 Information Security Audit Plan",
-      owner: "John Carter",
-      collectedDate: "12 May 2024",
-      reviewDate: "12 Aug 2024",
-      status: "Pending Review",
-      fileName: "q2-access-review.xlsx",
-      size: "742 KB",
-    },
-    {
-      id: 3,
-      reference: "EV-0003",
-      name: "MFA Configuration Screenshot",
-      description:
-        "Screenshot evidence showing multi-factor authentication configuration for administrative accounts.",
-      type: "Screenshot",
-      framework: "NIST CSF",
-      control: "PR.AA-03",
-      audit: "NIST CSF Assessment Programme",
-      owner: "Emily Davis",
-      collectedDate: "15 May 2024",
-      reviewDate: "15 Nov 2024",
-      status: "Approved",
-      fileName: "mfa-admin-config.png",
-      size: "286 KB",
-    },
-    {
-      id: 4,
-      reference: "EV-0004",
-      name: "Firewall Configuration",
-      description:
-        "Exported firewall configuration demonstrating implementation of network security controls.",
-      type: "Configuration",
-      framework: "NIST 800-53",
-      control: "SC-7",
-      audit: "Access Control Review 2024",
-      owner: "Michael Lee",
-      collectedDate: "20 Apr 2024",
-      reviewDate: "20 Oct 2024",
-      status: "Approved",
-      fileName: "firewall-config.txt",
-      size: "94 KB",
-    },
-    {
-      id: 5,
-      reference: "EV-0005",
-      name: "Security Monitoring Logs",
-      description:
-        "Sample security monitoring logs collected for validation of monitoring and detection controls.",
-      type: "Log",
-      framework: "ISO 27001",
-      control: "A.8.16",
-      audit: "2024 Information Security Audit Plan",
-      owner: "Alice Smith",
-      collectedDate: "22 May 2024",
-      reviewDate: "22 Jun 2024",
-      status: "Pending Review",
-      fileName: "security-monitoring-logs.zip",
-      size: "4.2 MB",
-    },
-    {
-      id: 6,
-      reference: "EV-0006",
-      name: "Incident Response Procedure",
-      description:
-        "Documented incident response procedure used to demonstrate incident management requirements.",
-      type: "Document",
-      framework: "NIST CSF",
-      control: "RS.MA-01",
-      audit: "NIST CSF Assessment Programme",
-      owner: "John Carter",
-      collectedDate: "01 Jun 2024",
-      reviewDate: "01 Jun 2025",
-      status: "Rejected",
-      fileName: "incident-response-procedure.pdf",
-      size: "928 KB",
-    },
-    {
-      id: 7,
-      reference: "EV-0007",
-      name: "Business Continuity Test Report",
-      description:
-        "Evidence from the latest business continuity and recovery exercise.",
-      type: "Report",
-      framework: "ISO 27001",
-      control: "A.5.30",
-      audit: "2024 Information Security Audit Plan",
-      owner: "Emily Davis",
-      collectedDate: "03 May 2023",
-      reviewDate: "03 May 2024",
-      status: "Expired",
-      fileName: "bcp-test-report.pdf",
-      size: "2.4 MB",
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: 11,
-      reference: "EV-0011",
-      name: "Financial Security Policy",
-      description:
-        "Corporate security policy applicable to financial information systems.",
-      type: "Policy",
-      framework: "ISO 27001",
-      control: "A.5.1",
-      audit: "Financial Services Compliance Plan",
-      owner: "Sarah Brown",
-      collectedDate: "04 May 2024",
-      reviewDate: "04 May 2025",
-      status: "Approved",
-      fileName: "financial-security-policy.pdf",
-      size: "1.4 MB",
-    },
-    {
-      id: 12,
-      reference: "EV-0012",
-      name: "Cyber Risk Assessment",
-      description:
-        "Enterprise cyber risk assessment covering critical financial business functions.",
-      type: "Report",
-      framework: "NIST CSF",
-      control: "ID.RA-01",
-      audit: "Cyber Risk Assessment Programme",
-      owner: "David Wilson",
-      collectedDate: "15 Jun 2024",
-      reviewDate: "15 Sep 2024",
-      status: "Pending Review",
-      fileName: "enterprise-cyber-risk.pdf",
-      size: "3.1 MB",
-    },
-    {
-      id: 13,
-      reference: "EV-0013",
-      name: "Vendor SOC Evidence",
-      description:
-        "Vendor assurance evidence supporting third-party security review activities.",
-      type: "Report",
-      framework: "SOC 2",
-      control: "CC3.2",
-      audit: "Vendor Assurance Programme",
-      owner: "Sarah Brown",
-      collectedDate: "01 Aug 2024",
-      reviewDate: "01 Feb 2025",
-      status: "Pending Review",
-      fileName: "vendor-soc-report.pdf",
-      size: "5.6 MB",
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: 21,
-      reference: "EV-0021",
-      name: "Healthcare Information Security Policy",
-      description:
-        "Information security policy covering healthcare information systems.",
-      type: "Policy",
-      framework: "ISO 27001",
-      control: "A.5.1",
-      audit: "Healthcare Security Audit Plan",
-      owner: "Michael Lee",
-      collectedDate: "05 May 2024",
-      reviewDate: "05 May 2025",
-      status: "Approved",
-      fileName: "healthcare-security-policy.pdf",
-      size: "1.9 MB",
-    },
-    {
-      id: 22,
-      reference: "EV-0022",
-      name: "Clinical System Risk Assessment",
-      description:
-        "Risk assessment evidence for clinical and patient-facing systems.",
-      type: "Report",
-      framework: "NIST RMF",
-      control: "RA-3",
-      audit: "Clinical Systems Risk Review",
-      owner: "Emily Davis",
-      collectedDate: "10 Jul 2024",
-      reviewDate: "10 Jan 2025",
-      status: "Pending Review",
-      fileName: "clinical-risk-assessment.pdf",
-      size: "2.7 MB",
-    },
-    {
-      id: 23,
-      reference: "EV-0023",
-      name: "Security Controls Configuration",
-      description:
-        "Technical configuration evidence for implemented security safeguards.",
-      type: "Configuration",
-      framework: "NIST 800-53",
-      control: "AC-2",
-      audit: "Security Controls Validation",
-      owner: "John Carter",
-      collectedDate: "12 Apr 2024",
-      reviewDate: "12 Oct 2024",
-      status: "Approved",
-      fileName: "security-controls-config.txt",
-      size: "318 KB",
-    },
-  ],
-};
-
 export default function EvidencePage() {
   const { currentWorkspace } = useWorkspace();
-
   const workspaceId = currentWorkspace.id;
-
-  const [evidence, setEvidence] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const params = useParams();
-  
+  const auditId = (params?.id as string) || "";
+
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async (wsId: string, aId: string) => {
+    if (!wsId || !aId) {
+      setEvidence([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await getEvidences(wsId, aId);
+      if (res.success && res.data) {
+        setEvidence(
+          (res.data as EvidenceRecord[]).map((e) => ({
+            id: e.id,
+            reference: e.reference || e.id,
+            name: e.name,
+            description: e.description || "",
+            type: (e.type as EvidenceType) || "Document",
+            framework: e.framework || "ISO 27001",
+            control: e.control || "A.5.1",
+            audit: e.audit_name || aId,
+            owner: e.uploaded_by || "Unassigned",
+            collectedDate: e.date || "Today",
+            reviewDate: "Scheduled",
+            status: (e.status as EvidenceStatus) || "Requested",
+            fileName: e.name,
+            size: e.size || "1.2 MB",
+          }))
+        );
+      } else {
+        setEvidence([]);
+      }
+    } catch {
+      setEvidence([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (workspaceId && params.id) {
-      getEvidences(workspaceId, params.id as string).then((res: any) => {
-        if (res.success && res.data) {
-          setEvidence(res.data.map((e: any) => ({...e, evidenceId: e.reference, uploadedBy: e.uploaded_by, uploaded: e.date})));
-        }
-        setLoading(false);
-      });
+    if (workspaceId && auditId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadData(workspaceId, auditId);
     } else {
       setEvidence([]);
       setLoading(false);
     }
-  }, [workspaceId, params.id]);
+  }, [workspaceId, auditId, loadData]);
 
   const [search, setSearch] = useState("");
 
@@ -365,7 +173,7 @@ export default function EvidencePage() {
   const [editingEvidence, setEditingEvidence] =
     useState<Evidence | null>(null);
 
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -380,8 +188,6 @@ export default function EvidencePage() {
   const [formReviewDate, setFormReviewDate] = useState("");
   const [formFileName, setFormFileName] = useState("");
   const [formSize, setFormSize] = useState("");
-
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading evidence...</div>;
 
   const filteredEvidence = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -412,20 +218,16 @@ export default function EvidencePage() {
     });
   }, [evidence, search, statusFilter, typeFilter]);
 
-  const approvedCount = evidence.filter(
-    (item) => item.status === "Approved"
+  const acceptedCount = evidence.filter(
+    (item) => item.status === "Accepted"
   ).length;
 
-  const pendingCount = evidence.filter(
-    (item) => item.status === "Pending Review"
+  const underReviewCount = evidence.filter(
+    (item) => item.status === "Under Review" || item.status === "Submitted"
   ).length;
 
-  const expiredCount = evidence.filter(
-    (item) => item.status === "Expired"
-  ).length;
-
-  const rejectedCount = evidence.filter(
-    (item) => item.status === "Rejected"
+  const attentionCount = evidence.filter(
+    (item) => item.status === "Rejected" || item.status === "Requested"
   ).length;
 
   function resetForm() {
@@ -467,89 +269,45 @@ export default function EvidencePage() {
     setShowModal(true);
   }
 
-  function saveEvidence() {
-    if (!formName.trim()) {
+  async function saveEvidence() {
+    if (!workspaceId || !auditId || !formName.trim()) {
       return;
     }
 
     if (editingEvidence) {
-      setEvidence((current) => current.map(
-          (item) =>
-            item.id === editingEvidence.id
-              ? {
-                  ...item,
-                  name: formName.trim(),
-                  description:
-                    formDescription.trim(),
-                  type: formType,
-                  framework: formFramework,
-                  control:
-                    formControl.trim() ||
-                    "Not assigned",
-                  audit:
-                    formAudit.trim() ||
-                    "Not assigned",
-                  owner:
-                    formOwner.trim() ||
-                    "Unassigned",
-                  collectedDate:
-                    formCollectedDate ||
-                    "Not recorded",
-                  reviewDate:
-                    formReviewDate ||
-                    "Not scheduled",
-                  fileName:
-                    formFileName.trim() ||
-                    item.fileName,
-                  size:
-                    formSize.trim() ||
-                    item.size,
-                }
-              : item
-        ));
-    } else {
-      const nextNumber =
-        (evidence.reduce(
-          (max, item) => Math.max(max, item.id),
-          0
-        ) % 10000) + 1;
+      const res = await updateEvidence(
+        workspaceId,
+        auditId,
+        editingEvidence.id,
+        {
+          name: formName.trim(),
+          description: formDescription.trim(),
+          type: formType,
+          framework: formFramework,
+          control: formControl.trim() || "A.5.1",
+          uploadedBy: formOwner.trim() || "Unassigned",
+          size: formSize.trim() || "1.2 MB",
+        }
+      );
 
-      const newEvidence: Evidence = {
-        id: Date.now(),
-        reference: `EV-${String(nextNumber).padStart(
-          4,
-          "0"
-        )}`,
+      if (res.success) {
+        await loadData(workspaceId, auditId);
+      }
+    } else {
+      const res = await createEvidence(workspaceId, auditId, {
         name: formName.trim(),
-        description:
-          formDescription.trim(),
+        description: formDescription.trim(),
         type: formType,
         framework: formFramework,
-        control:
-          formControl.trim() ||
-          "Not assigned",
-        audit:
-          formAudit.trim() ||
-          "Not assigned",
-        owner:
-          formOwner.trim() ||
-          "Unassigned",
-        collectedDate:
-          formCollectedDate ||
-          "Not recorded",
-        reviewDate:
-          formReviewDate ||
-          "Not scheduled",
-        status: "Pending Review",
-        fileName:
-          formFileName.trim() ||
-          "evidence-file",
-        size:
-          formSize.trim() ||
-          "Unknown",
-      };
+        control: formControl.trim() || "A.5.1",
+        uploadedBy: formOwner.trim() || "Unassigned",
+        status: "Requested",
+        size: formSize.trim() || "1.2 MB",
+      });
 
-      setEvidence((current) => [newEvidence, ...current]);
+      if (res.success) {
+        await loadData(workspaceId, auditId);
+      }
     }
 
     setShowModal(false);
@@ -557,35 +315,49 @@ export default function EvidencePage() {
     resetForm();
   }
 
-  function deleteEvidence(item: Evidence) {
+  async function deleteEvidence(item: Evidence) {
+    if (!workspaceId || !auditId) return;
+
     const confirmed = window.confirm(
-      `Remove "${item.name}" from this workspace?`
+      `Remove "${item.name}" from this audit?`
     );
 
     if (!confirmed) {
       return;
     }
 
-    setEvidence((current) => current.filter(
-        (evidenceItem) =>
-          evidenceItem.id !== item.id
-      ));
+    const res = await deleteEvidenceAction(workspaceId, auditId, item.id);
+    if (res.success) {
+      setEvidence((current) =>
+        current.filter((evidenceItem) => evidenceItem.id !== item.id)
+      );
+    }
 
     setOpenMenu(null);
   }
 
-  function updateStatus(
+  async function updateStatus(
     item: Evidence,
     status: EvidenceStatus
   ) {
-    setEvidence((current) => current.map((evidenceItem) =>
-        evidenceItem.id === item.id
-          ? {
-              ...evidenceItem,
-              status,
-            }
-          : evidenceItem
-      ));
+    if (!workspaceId || !auditId) return;
+
+    const res = await updateEvidence(workspaceId, auditId, item.id, {
+      status,
+    });
+
+    if (res.success) {
+      setEvidence((current) =>
+        current.map((evidenceItem) =>
+          evidenceItem.id === item.id
+            ? {
+                ...evidenceItem,
+                status,
+              }
+            : evidenceItem
+        )
+      );
+    }
 
     setOpenMenu(null);
   }
@@ -638,16 +410,16 @@ export default function EvidencePage() {
             />
 
             <SummaryCard
-              title="Pending Review"
-              value={String(pendingCount)}
+              title="Under Review"
+              value={String(underReviewCount)}
               icon={
                 <Clock3 className="h-5 w-5" />
               }
             />
 
             <SummaryCard
-              title="Approved"
-              value={String(approvedCount)}
+              title="Accepted"
+              value={String(acceptedCount)}
               icon={
                 <CheckCircle2 className="h-5 w-5" />
               }
@@ -655,9 +427,7 @@ export default function EvidencePage() {
 
             <SummaryCard
               title="Requires Attention"
-              value={String(
-                expiredCount + rejectedCount
-              )}
+              value={String(attentionCount)}
               icon={
                 <AlertTriangle className="h-5 w-5" />
               }
@@ -834,7 +604,16 @@ export default function EvidencePage() {
                 </thead>
 
                 <tbody>
-                  {filteredEvidence.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="px-5 py-14 text-center text-[12px] text-slate-500"
+                      >
+                        Loading evidence...
+                      </td>
+                    </tr>
+                  ) : filteredEvidence.length > 0 ? (
                     filteredEvidence.map((item) => (
                       <EvidenceRow
                         key={item.id}
@@ -859,7 +638,7 @@ export default function EvidencePage() {
                         onApprove={() =>
                           updateStatus(
                             item,
-                            "Approved"
+                            "Accepted"
                           )
                         }
                         onReject={() =>
@@ -904,7 +683,7 @@ export default function EvidencePage() {
               </span>
 
               <span className="text-[10px] text-slate-400">
-                {pendingCount} pending review
+                {underReviewCount} under review
               </span>
             </div>
           </div>
@@ -1056,13 +835,13 @@ function EvidenceRow({
   onDelete: () => void;
 }) {
   const statusClass =
-    evidence.status === "Approved"
+    evidence.status === "Accepted"
       ? "bg-emerald-50 text-emerald-700"
-      : evidence.status === "Pending Review"
+      : evidence.status === "Under Review"
         ? "bg-amber-50 text-amber-700"
         : evidence.status === "Rejected"
           ? "bg-red-50 text-red-700"
-          : evidence.status === "Expired"
+          : evidence.status === "Submitted"
             ? "bg-orange-50 text-orange-700"
             : "bg-slate-100 text-slate-500";
 
@@ -1197,14 +976,14 @@ function EvidenceRow({
               Edit Evidence
             </button>
 
-            {evidence.status !== "Approved" && (
+            {evidence.status !== "Accepted" && (
               <button
                 type="button"
                 onClick={onApprove}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                Approve
+                Accept
               </button>
             )}
 
@@ -1436,7 +1215,7 @@ function EvidenceModal({
           )}
         </div>
 
-        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1582,7 +1361,7 @@ function EvidenceDetailsModal({
           </div>
         </div>
 
-        <div className="flex justifynd border-t border-slate-100 px-6 py-4">
+        <div className="flex justify-end border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1602,13 +1381,13 @@ function StatusBadge({
   status: EvidenceStatus;
 }) {
   const statusClass =
-    status === "Approved"
+    status === "Accepted"
       ? "bg-emerald-50 text-emerald-700"
-      : status === "Pending Review"
+      : status === "Under Review"
         ? "bg-amber-50 text-amber-700"
         : status === "Rejected"
           ? "bg-red-50 text-red-700"
-          : status === "Expired"
+          : status === "Submitted"
             ? "bg-orange-50 text-orange-700"
             : "bg-slate-100 text-slate-500";
 

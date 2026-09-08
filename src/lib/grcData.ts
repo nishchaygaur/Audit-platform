@@ -33,10 +33,12 @@ export type Finding = {
 };
 
 export type EvidenceStatus =
-  | "Pending Review"
+  | "Requested"
+  | "Submitted"
   | "Under Review"
   | "Accepted"
-  | "Rejected";
+  | "Rejected"
+  | "Pending Review";
 
 export type EvidenceItem = {
   id: string; // e.g. EVD-2024-001

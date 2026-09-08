@@ -1,111 +1,473 @@
 "use server";
 
 import db from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { hasPermission, type Permission, type Role } from "@/lib/rbac";
 import { requirePermission } from "@/lib/server-rbac";
 import crypto from "crypto";
 
-async function authorize(userId: string, workspaceId: string, permission: Permission) {
-  const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
-  if (!membership) return false;
-  return hasPermission(membership.role as Role, permission);
-}
+export type EvidenceStatus =
+  | "Requested"
+  | "Submitted"
+  | "Under Review"
+  | "Accepted"
+  | "Rejected";
+
+export const VALID_EVIDENCE_STATUSES: readonly EvidenceStatus[] = [
+  "Requested",
+  "Submitted",
+  "Under Review",
+  "Accepted",
+  "Rejected",
+] as const;
+
+export type CreateEvidenceInput = {
+  auditId?: string;
+  name: string;
+  reference?: string;
+  type?: string;
+  size?: string;
+  control?: string;
+  framework?: string;
+  uploadedBy?: string;
+  date?: string;
+  status?: EvidenceStatus;
+  description?: string;
+  reviewedBy?: string;
+};
+
+export type UpdateEvidenceInput = {
+  name?: string;
+  reference?: string;
+  type?: string;
+  size?: string;
+  control?: string;
+  framework?: string;
+  uploadedBy?: string;
+  date?: string;
+  status?: EvidenceStatus;
+  description?: string;
+  reviewedBy?: string;
+};
+
+export type EvidenceRecord = {
+  id: string;
+  workspace_id: string;
+  audit_id: string;
+  reference: string;
+  name: string;
+  type: string;
+  control: string;
+  uploaded_by: string;
+  date: string;
+  status: EvidenceStatus;
+  description: string;
+  size: string;
+  framework: string;
+  reviewed_by: string;
+  created_at: string;
+  audit_name?: string;
+};
 
 export async function getEvidences(workspaceId: string, auditId?: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-  if (!authorize(session.user.id, workspaceId, "evidence.view")) return { error: "Permission denied" };
-
-  let query = `SELECT * FROM evidence WHERE workspace_id = ?`;
-  const params: any[] = [workspaceId];
-  
-  if (auditId) {
-    query += ` AND audit_id = ?`;
-    params.push(auditId);
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
   }
-  
-  query += ` ORDER BY created_at DESC`;
-  const evidences = db.prepare(query).all(...params);
-  return { success: true, data: evidences };
-}
-
-export async function getEvidence(workspaceId: string, evidenceId: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-  if (!authorize(session.user.id, workspaceId, "evidence.view")) return { error: "Permission denied" };
-
-  const evidence = db.prepare(`SELECT * FROM evidence WHERE id = ? AND workspace_id = ?`).get(evidenceId, workspaceId);
-  if (!evidence) return { error: "Evidence not found" };
-
-  return { success: true, data: evidence };
-}
-
-export async function createEvidence(workspaceId: string, data: any) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-  if (!authorize(session.user.id, workspaceId, "evidence.create")) return { error: "Permission denied" };
-
-  if (data.auditId) {
-    const audit = db.prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`).get(data.auditId, workspaceId);
-    if (!audit) return { error: "Audit not found in this workspace" };
-  } else {
-    return { error: "auditId is required" };
-  }
-
-  const id = crypto.randomUUID();
-  const reference = data.reference || `EV-${crypto.randomUUID().slice(0, 4).toUpperCase()}`;
 
   try {
+    await requirePermission("evidence.view", workspaceId);
+
+    if (auditId) {
+      const audit = db
+        .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
+        .get(auditId, workspaceId);
+
+      if (!audit) {
+        return { success: false, error: "Audit not found in this workspace" };
+      }
+
+      const rows = db
+        .prepare(`
+          SELECT e.*, a.name as audit_name
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE a.workspace_id = ? AND e.audit_id = ?
+          ORDER BY e.created_at DESC
+        `)
+        .all(workspaceId, auditId);
+
+      return { success: true, data: rows };
+    }
+
+    const rows = db
+      .prepare(`
+        SELECT e.*, a.name as audit_name
+        FROM evidence e
+        JOIN audits a ON e.audit_id = a.id
+        WHERE a.workspace_id = ?
+        ORDER BY e.created_at DESC
+      `)
+      .all(workspaceId);
+
+    return { success: true, data: rows };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch evidence";
+    return { success: false, error: message };
+  }
+}
+
+export async function getEvidence(
+  workspaceId: string,
+  param2: string,
+  param3?: string
+) {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
+
+  const auditId = param3 ? param2 : undefined;
+  const evidenceId = param3 ? param3 : param2;
+
+  if (!evidenceId) {
+    return { success: false, error: "Evidence ID is required" };
+  }
+
+  try {
+    await requirePermission("evidence.view", workspaceId);
+
+    let row;
+    if (auditId) {
+      const audit = db
+        .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
+        .get(auditId, workspaceId);
+
+      if (!audit) {
+        return { success: false, error: "Audit not found in this workspace" };
+      }
+
+      row = db
+        .prepare(`
+          SELECT e.*, a.name as audit_name
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE e.id = ? AND e.audit_id = ? AND a.workspace_id = ?
+        `)
+        .get(evidenceId, auditId, workspaceId);
+    } else {
+      row = db
+        .prepare(`
+          SELECT e.*, a.name as audit_name
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE e.id = ? AND a.workspace_id = ?
+        `)
+        .get(evidenceId, workspaceId);
+    }
+
+    if (!row) {
+      return { success: false, error: "Evidence not found in this workspace" };
+    }
+
+    return { success: true, data: row };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch evidence";
+    return { success: false, error: message };
+  }
+}
+
+export async function createEvidence(
+  workspaceId: string,
+  param2: string | CreateEvidenceInput,
+  param3?: CreateEvidenceInput
+) {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
+
+  const auditId = typeof param2 === "string" ? param2 : param2.auditId;
+  const data: CreateEvidenceInput = typeof param2 === "string" ? (param3 || ({} as CreateEvidenceInput)) : param2;
+
+  if (!auditId) {
+    return { success: false, error: "Audit ID is required" };
+  }
+
+  if (!data.name || !data.name.trim()) {
+    return { success: false, error: "Evidence name is required" };
+  }
+
+  try {
+    const auth = await requirePermission("evidence.create", workspaceId);
+
+    // Verify audit belongs to this workspace
+    const audit = db
+      .prepare(`SELECT id, framework, lead FROM audits WHERE id = ? AND workspace_id = ?`)
+      .get(auditId, workspaceId) as { id: string; framework: string; lead: string } | undefined;
+
+    if (!audit) {
+      return { success: false, error: "Audit not found in this workspace" };
+    }
+
+    // Status validation
+    let status: EvidenceStatus = "Requested";
+    if (data.status) {
+      if (!VALID_EVIDENCE_STATUSES.includes(data.status)) {
+        return {
+          success: false,
+          error: `Invalid evidence status. Must be one of: ${VALID_EVIDENCE_STATUSES.join(", ")}`,
+        };
+      }
+      status = data.status;
+    }
+
+    const id = `EVD-${new Date().getFullYear()}-${crypto
+      .randomUUID()
+      .slice(0, 5)
+      .toUpperCase()}`;
+
+    const reference = data.reference || `EV-${crypto.randomUUID().slice(0, 4).toUpperCase()}`;
+    const name = data.name.trim();
+    const type = data.type || "PDF";
+    const control = data.control || "General";
+    const uploadedBy = data.uploadedBy || auth.user.name || "Auditor";
+    const date = data.date || new Date().toISOString().split("T")[0];
+    const description = data.description || "";
+    const size = data.size || "1.2 MB";
+    const framework = data.framework || audit.framework || "ISO 27001";
+    const reviewedBy = data.reviewedBy || "—";
+
     db.prepare(`
-      INSERT INTO evidence (id, workspace_id, audit_id, reference, name, type, control, uploaded_by, date, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO evidence (
+        id, workspace_id, audit_id, reference, name, type, control,
+        uploaded_by, date, status, description, size, framework, reviewed_by
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, workspaceId, data.auditId, reference, data.name, data.type, data.control, data.uploadedBy, data.date, data.status
+      id,
+      workspaceId,
+      auditId,
+      reference,
+      name,
+      type,
+      control,
+      uploadedBy,
+      date,
+      status,
+      description,
+      size,
+      framework,
+      reviewedBy
     );
-    return { success: true, data: { id, reference, ...data } };
-  } catch (err) {
-    return { error: "Failed to create evidence" };
+
+    // Keep audit evidence metric in sync
+    db.prepare(`
+      UPDATE audits
+      SET evidence = (SELECT COUNT(*) FROM evidence WHERE audit_id = ?)
+      WHERE id = ?
+    `).run(auditId, auditId);
+
+    const record: EvidenceRecord = {
+      id,
+      workspace_id: workspaceId,
+      audit_id: auditId,
+      reference,
+      name,
+      type,
+      control,
+      uploaded_by: uploadedBy,
+      date,
+      status,
+      description,
+      size,
+      framework,
+      reviewed_by: reviewedBy,
+      created_at: new Date().toISOString(),
+    };
+
+    return { success: true, data: record };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to create evidence";
+    return { success: false, error: message };
   }
 }
 
-export async function updateEvidence(workspaceId: string, evidenceId: string, updates: any) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-  if (!authorize(session.user.id, workspaceId, "evidence.update")) return { error: "Permission denied" };
+export async function updateEvidence(
+  workspaceId: string,
+  param2: string,
+  param3: string | UpdateEvidenceInput,
+  param4?: UpdateEvidenceInput
+) {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
 
-  const evidence = db.prepare(`SELECT id FROM evidence WHERE id = ? AND workspace_id = ?`).get(evidenceId, workspaceId);
-  if (!evidence) return { error: "Evidence not found" };
+  const auditId = typeof param3 === "string" ? param2 : undefined;
+  const evidenceId = typeof param3 === "string" ? param3 : param2;
+  const updates: UpdateEvidenceInput = typeof param3 === "string" ? (param4 || {}) : param3;
 
-  const setClause = Object.keys(updates).map(k => {
-    if (k === 'auditId') return 'audit_id = ?';
-    if (k === 'uploadedBy') return 'uploaded_by = ?';
-    return `${k} = ?`;
-  }).join(", ");
-  const values = Object.values(updates);
-
-  if (values.length === 0) return { success: true };
+  if (!evidenceId) {
+    return { success: false, error: "Evidence ID is required" };
+  }
 
   try {
-    db.prepare(`UPDATE evidence SET ${setClause} WHERE id = ? AND workspace_id = ?`).run(...values, evidenceId, workspaceId);
+    await requirePermission("evidence.update", workspaceId);
+
+    // Validate existence and tenant chain
+    let existing;
+    if (auditId) {
+      existing = db
+        .prepare(`
+          SELECT e.id, e.audit_id, e.workspace_id
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE e.id = ? AND e.audit_id = ? AND a.workspace_id = ?
+        `)
+        .get(evidenceId, auditId, workspaceId) as { id: string; audit_id: string; workspace_id: string } | undefined;
+    } else {
+      existing = db
+        .prepare(`
+          SELECT e.id, e.audit_id, e.workspace_id
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE e.id = ? AND a.workspace_id = ?
+        `)
+        .get(evidenceId, workspaceId) as { id: string; audit_id: string; workspace_id: string } | undefined;
+    }
+
+    if (!existing) {
+      return { success: false, error: "Evidence not found in this workspace" };
+    }
+
+    const setParts: string[] = [];
+    const values: (string | number)[] = [];
+
+    if (updates.name !== undefined) {
+      setParts.push("name = ?");
+      values.push(updates.name.trim());
+    }
+    if (updates.reference !== undefined) {
+      setParts.push("reference = ?");
+      values.push(updates.reference);
+    }
+    if (updates.type !== undefined) {
+      setParts.push("type = ?");
+      values.push(updates.type);
+    }
+    if (updates.size !== undefined) {
+      setParts.push("size = ?");
+      values.push(updates.size);
+    }
+    if (updates.control !== undefined) {
+      setParts.push("control = ?");
+      values.push(updates.control);
+    }
+    if (updates.framework !== undefined) {
+      setParts.push("framework = ?");
+      values.push(updates.framework);
+    }
+    if (updates.uploadedBy !== undefined) {
+      setParts.push("uploaded_by = ?");
+      values.push(updates.uploadedBy);
+    }
+    if (updates.date !== undefined) {
+      setParts.push("date = ?");
+      values.push(updates.date);
+    }
+    if (updates.status !== undefined) {
+      if (!VALID_EVIDENCE_STATUSES.includes(updates.status)) {
+        return {
+          success: false,
+          error: `Invalid evidence status. Must be one of: ${VALID_EVIDENCE_STATUSES.join(", ")}`,
+        };
+      }
+      setParts.push("status = ?");
+      values.push(updates.status);
+    }
+    if (updates.description !== undefined) {
+      setParts.push("description = ?");
+      values.push(updates.description);
+    }
+    if (updates.reviewedBy !== undefined) {
+      setParts.push("reviewed_by = ?");
+      values.push(updates.reviewedBy);
+    }
+
+    if (setParts.length === 0) {
+      return { success: true };
+    }
+
+    values.push(evidenceId, existing.audit_id, workspaceId);
+
+    db.prepare(`
+      UPDATE evidence
+      SET ${setParts.join(", ")}
+      WHERE id = ? AND audit_id = ? AND workspace_id = ?
+    `).run(...values);
+
     return { success: true };
-  } catch (err) {
-    return { error: "Failed to update evidence" };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to update evidence";
+    return { success: false, error: message };
   }
 }
 
-export async function deleteEvidence(workspaceId: string, evidenceId: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-  if (!authorize(session.user.id, workspaceId, "evidence.delete")) return { error: "Permission denied" };
+export async function deleteEvidence(
+  workspaceId: string,
+  param2: string,
+  param3?: string
+) {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
 
-  const evidence = db.prepare(`SELECT id FROM evidence WHERE id = ? AND workspace_id = ?`).get(evidenceId, workspaceId);
-  if (!evidence) return { error: "Evidence not found" };
+  const auditId = param3 ? param2 : undefined;
+  const evidenceId = param3 ? param3 : param2;
+
+  if (!evidenceId) {
+    return { success: false, error: "Evidence ID is required" };
+  }
 
   try {
-    db.prepare(`DELETE FROM evidence WHERE id = ? AND workspace_id = ?`).run(evidenceId, workspaceId);
+    await requirePermission("evidence.delete", workspaceId);
+
+    let existing;
+    if (auditId) {
+      existing = db
+        .prepare(`
+          SELECT e.id, e.audit_id
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE e.id = ? AND e.audit_id = ? AND a.workspace_id = ?
+        `)
+        .get(evidenceId, auditId, workspaceId) as { id: string; audit_id: string } | undefined;
+    } else {
+      existing = db
+        .prepare(`
+          SELECT e.id, e.audit_id
+          FROM evidence e
+          JOIN audits a ON e.audit_id = a.id
+          WHERE e.id = ? AND a.workspace_id = ?
+        `)
+        .get(evidenceId, workspaceId) as { id: string; audit_id: string } | undefined;
+    }
+
+    if (!existing) {
+      return { success: false, error: "Evidence not found in this workspace" };
+    }
+
+    db.prepare(`
+      DELETE FROM evidence
+      WHERE id = ? AND audit_id = ? AND workspace_id = ?
+    `).run(evidenceId, existing.audit_id, workspaceId);
+
+    // Keep audit evidence metric in sync
+    db.prepare(`
+      UPDATE audits
+      SET evidence = (SELECT COUNT(*) FROM evidence WHERE audit_id = ?)
+      WHERE id = ?
+    `).run(existing.audit_id, existing.audit_id);
+
     return { success: true };
-  } catch (err) {
-    return { error: "Failed to delete evidence" };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete evidence";
+    return { success: false, error: message };
   }
 }
+

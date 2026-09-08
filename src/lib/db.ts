@@ -112,6 +112,10 @@ db.exec(`
     uploaded_by TEXT NOT NULL,
     date TEXT NOT NULL,
     status TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    size TEXT DEFAULT '',
+    framework TEXT DEFAULT '',
+    reviewed_by TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
@@ -125,5 +129,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_evidence_workspace ON evidence(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_evidence_audit ON evidence(audit_id);
 `);
+
+// Safe migrations for evidence columns
+const evidenceColumns = (db.pragma("table_info(evidence)") as { name: string }[]).map((c) => c.name);
+if (!evidenceColumns.includes("description")) {
+  db.exec("ALTER TABLE evidence ADD COLUMN description TEXT DEFAULT ''");
+}
+if (!evidenceColumns.includes("size")) {
+  db.exec("ALTER TABLE evidence ADD COLUMN size TEXT DEFAULT ''");
+}
+if (!evidenceColumns.includes("framework")) {
+  db.exec("ALTER TABLE evidence ADD COLUMN framework TEXT DEFAULT ''");
+}
+if (!evidenceColumns.includes("reviewed_by")) {
+  db.exec("ALTER TABLE evidence ADD COLUMN reviewed_by TEXT DEFAULT ''");
+}
 
 export default db;

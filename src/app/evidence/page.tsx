@@ -1,8 +1,15 @@
 "use client";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getEvidences } from "@/actions/evidence";
+import {
+  getEvidences,
+  createEvidence,
+  updateEvidence,
+  deleteEvidence as deleteEvidenceAction,
+  type EvidenceRecord,
+} from "@/actions/evidence";
+import { getAudits } from "@/actions/audits";
 import type { ReactNode } from "react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 
 import {
   Upload,
@@ -23,14 +30,17 @@ import {
 } from "lucide-react";
 
 type EvidenceStatus =
-  | "Pending Review"
+  | "Requested"
+  | "Submitted"
   | "Under Review"
   | "Accepted"
   | "Rejected";
 
 type Evidence = {
-  id: number;
+  id: string;
   evidenceId: string;
+  auditId: string;
+  audit?: string;
   name: string;
   type: string;
   size: string;
@@ -40,10 +50,12 @@ type Evidence = {
   status: EvidenceStatus;
   uploaded: string;
   reviewedBy: string;
+  description?: string;
 };
 
 const STATUS_OPTIONS: EvidenceStatus[] = [
-  "Pending Review",
+  "Requested",
+  "Submitted",
   "Under Review",
   "Accepted",
   "Rejected",
@@ -58,138 +70,97 @@ const FRAMEWORK_OPTIONS = [
   "CIS Controls",
 ];
 
-const INITIAL_EVIDENCE: Evidence[] = [
-  {
-    id: 1,
-    evidenceId: "EV-2026-001",
-    name: "Information Security Policy.pdf",
-    type: "PDF",
-    size: "1.8 MB",
-    control: "A.5.1",
-    framework: "ISO 27001",
-    owner: "Alice Smith",
-    status: "Accepted",
-    uploaded: "Today, 10:32 AM",
-    reviewedBy: "John Carter",
-  },
-  {
-    id: 2,
-    evidenceId: "EV-2026-002",
-    name: "Access Control Review.xlsx",
-    type: "XLSX",
-    size: "842 KB",
-    control: "A.5.15",
-    framework: "ISO 27001",
-    owner: "Michael Lee",
-    status: "Under Review",
-    uploaded: "Today, 09:48 AM",
-    reviewedBy: "John Carter",
-  },
-  {
-    id: 3,
-    evidenceId: "EV-2026-003",
-    name: "Security Awareness Training.pdf",
-    type: "PDF",
-    size: "3.2 MB",
-    control: "PR.AT-01",
-    framework: "NIST CSF",
-    owner: "Emily Davis",
-    status: "Pending Review",
-    uploaded: "Yesterday, 04:42 PM",
-    reviewedBy: "—",
-  },
-  {
-    id: 4,
-    evidenceId: "EV-2026-004",
-    name: "Vulnerability Management Report.pdf",
-    type: "PDF",
-    size: "2.4 MB",
-    control: "DE.CM-08",
-    framework: "NIST CSF",
-    owner: "David Wilson",
-    status: "Accepted",
-    uploaded: "Yesterday, 02:18 PM",
-    reviewedBy: "John Carter",
-  },
-  {
-    id: 5,
-    evidenceId: "EV-2026-005",
-    name: "Risk Assessment Register.xlsx",
-    type: "XLSX",
-    size: "1.1 MB",
-    control: "RM-02",
-    framework: "NIST RMF",
-    owner: "Alice Smith",
-    status: "Rejected",
-    uploaded: "2 days ago",
-    reviewedBy: "John Carter",
-  },
-  {
-    id: 6,
-    evidenceId: "EV-2026-006",
-    name: "Incident Response Procedure.docx",
-    type: "DOCX",
-    size: "764 KB",
-    control: "CC7.3",
-    framework: "SOC 2",
-    owner: "Sarah Brown",
-    status: "Pending Review",
-    uploaded: "3 days ago",
-    reviewedBy: "—",
-  },
-];
-
 export default function EvidencePage() {
   const { currentWorkspace } = useWorkspace();
-  const [evidence, setEvidence] = useState<any[]>([]);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [audits, setAudits] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (currentWorkspace?.id) {
-      getEvidences(currentWorkspace.id).then((res: any) => {
-        if (res.success && res.data) {
-          setEvidence(res.data.map((e: any) => ({...e, evidenceId: e.reference, uploadedBy: e.uploaded_by, uploaded: e.date})));
-        }
-        setLoading(false);
-      });
-    } else {
+  const [formAuditId, setFormAuditId] = useState("");
+
+  const loadData = useCallback(async (workspaceId: string) => {
+    if (!workspaceId) {
       setEvidence([]);
+      setAudits([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const [evidenceRes, auditsRes] = await Promise.all([
+        getEvidences(workspaceId),
+        getAudits(workspaceId),
+      ]);
+
+      if (evidenceRes.success && evidenceRes.data) {
+        setEvidence(
+          (evidenceRes.data as EvidenceRecord[]).map((e) => ({
+            id: e.id,
+            evidenceId: e.reference || e.id,
+            auditId: e.audit_id,
+            audit: e.audit_name || e.audit_id,
+            name: e.name,
+            type: e.type,
+            size: e.size || "1.2 MB",
+            control: e.control,
+            framework: e.framework || "ISO 27001",
+            owner: e.uploaded_by || "Auditor",
+            status: (e.status as EvidenceStatus) || "Requested",
+            uploaded: e.date || "Today",
+            reviewedBy: e.reviewed_by || "—",
+            description: e.description || "",
+          }))
+        );
+      } else {
+        setEvidence([]);
+      }
+
+      if (auditsRes.success && auditsRes.data) {
+        const auditList = (auditsRes.data as Array<{ id: string; name: string }>).map((a) => ({
+          id: a.id,
+          name: a.name,
+        }));
+        setAudits(auditList);
+        if (auditList.length > 0) {
+          setFormAuditId((prev) => prev || auditList[0].id);
+        }
+      } else {
+        setAudits([]);
+      }
+    } catch {
+      setEvidence([]);
+      setAudits([]);
+    } finally {
       setLoading(false);
     }
-  }, [currentWorkspace?.id]);
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    void loadData(currentWorkspace?.id);
+  }, [currentWorkspace?.id, loadData]);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState("All Status");
-
-  const [frameworkFilter, setFrameworkFilter] =
-    useState("All Frameworks");
+  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [frameworkFilter, setFrameworkFilter] = useState("All Frameworks");
 
   const [statusOpen, setStatusOpen] = useState(false);
   const [frameworkOpen, setFrameworkOpen] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
-  const [editingEvidence, setEditingEvidence] =
-    useState<Evidence | null>(null);
-
-  const [selectedEvidence, setSelectedEvidence] =
-    useState<Evidence | null>(null);
-
-  const [openMenu, setOpenMenu] =
-    useState<number | null>(null);
+  const [editingEvidence, setEditingEvidence] = useState<Evidence | null>(null);
+  const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState("PDF");
   const [formSize, setFormSize] = useState("");
   const [formControl, setFormControl] = useState("");
-  const [formFramework, setFormFramework] =
-    useState("ISO 27001");
-  const [formOwner, setFormOwner] =
-    useState("Alice Smith");
-  const [formStatus, setFormStatus] =
-    useState<EvidenceStatus>("Pending Review");
+  const [formFramework, setFormFramework] = useState("ISO 27001");
+  const [formOwner, setFormOwner] = useState("Alice Smith");
+  const [formStatus, setFormStatus] = useState<EvidenceStatus>("Requested");
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading evidence...</div>;
   const filteredEvidence = useMemo(() => {
     const query = search.toLowerCase().trim();
 
@@ -202,25 +173,15 @@ export default function EvidencePage() {
         item.owner.toLowerCase().includes(query);
 
       const matchesStatus =
-        statusFilter === "All Status" ||
-        item.status === statusFilter;
+        statusFilter === "All Status" || item.status === statusFilter;
 
       const matchesFramework =
         frameworkFilter === "All Frameworks" ||
         item.framework === frameworkFilter;
 
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesFramework
-      );
+      return matchesSearch && matchesStatus && matchesFramework;
     });
-  }, [
-    evidence,
-    search,
-    statusFilter,
-    frameworkFilter,
-  ]);
+  }, [evidence, search, statusFilter, frameworkFilter]);
 
   const totalEvidence = evidence.length;
 
@@ -228,10 +189,8 @@ export default function EvidencePage() {
     (item) => item.status === "Accepted"
   ).length;
 
-  const pendingEvidence = evidence.filter(
-    (item) =>
-      item.status === "Pending Review" ||
-      item.status === "Under Review"
+  const underReviewEvidence = evidence.filter(
+    (item) => item.status === "Under Review" || item.status === "Submitted"
   ).length;
 
   const rejectedEvidence = evidence.filter(
@@ -243,11 +202,14 @@ export default function EvidencePage() {
 
     setFormName("");
     setFormType("PDF");
-    setFormSize("");
-    setFormControl("");
+    setFormSize("1.2 MB");
+    setFormControl("A.5.1");
     setFormFramework("ISO 27001");
     setFormOwner("Alice Smith");
-    setFormStatus("Pending Review");
+    setFormStatus("Requested");
+    if (audits.length > 0) {
+      setFormAuditId(audits[0].id);
+    }
 
     setShowModal(true);
   }
@@ -262,94 +224,102 @@ export default function EvidencePage() {
     setFormFramework(item.framework);
     setFormOwner(item.owner);
     setFormStatus(item.status);
+    setFormAuditId(item.auditId);
 
     setOpenMenu(null);
     setShowModal(true);
   }
 
-  function saveEvidence() {
+  async function saveEvidence() {
     if (
+      !currentWorkspace?.id ||
       !formName.trim() ||
-      !formControl.trim() ||
-      !formSize.trim()
+      !formControl.trim()
     ) {
       return;
     }
 
     if (editingEvidence) {
-      setEvidence((current) =>
-        current.map((item) =>
-          item.id === editingEvidence.id
-            ? {
-                ...item,
-                name: formName.trim(),
-                type: formType,
-                size: formSize.trim(),
-                control: formControl.trim(),
-                framework: formFramework,
-                owner: formOwner,
-                status: formStatus,
-              }
-            : item
-        )
-      );
-    } else {
-      const newEvidence: Evidence = {
-        id: Date.now(),
-        evidenceId: `EV-2026-${String(
-          evidence.length + 1
-        ).padStart(3, "0")}`,
+      const auditId = formAuditId || editingEvidence.auditId;
+      const res = await updateEvidence(currentWorkspace.id, auditId, editingEvidence.id, {
         name: formName.trim(),
         type: formType,
-        size: formSize.trim(),
+        size: formSize.trim() || "1.2 MB",
         control: formControl.trim(),
         framework: formFramework,
-        owner: formOwner,
+        uploadedBy: formOwner,
         status: formStatus,
-        uploaded: "Just now",
-        reviewedBy: "—",
-      };
+      });
 
-      setEvidence((current) => [
-        newEvidence,
-        ...current,
-      ]);
+      if (res.success) {
+        await loadData(currentWorkspace.id);
+      }
+    } else {
+      if (!formAuditId) {
+        return;
+      }
+
+      const res = await createEvidence(currentWorkspace.id, formAuditId, {
+        name: formName.trim(),
+        type: formType,
+        size: formSize.trim() || "1.2 MB",
+        control: formControl.trim(),
+        framework: formFramework,
+        uploadedBy: formOwner,
+        status: formStatus,
+      });
+
+      if (res.success) {
+        await loadData(currentWorkspace.id);
+      }
     }
 
     setShowModal(false);
   }
 
-  function deleteEvidence(item: Evidence) {
-    setEvidence((current) =>
-      current.filter((entry) => entry.id !== item.id)
-    );
+  async function deleteEvidence(item: Evidence) {
+    if (!currentWorkspace?.id) return;
+
+    const res = await deleteEvidenceAction(currentWorkspace.id, item.auditId, item.id);
+    if (res.success) {
+      setEvidence((current) =>
+        current.filter((entry) => entry.id !== item.id)
+      );
+
+      if (selectedEvidence?.id === item.id) {
+        setSelectedEvidence(null);
+      }
+    }
 
     setOpenMenu(null);
-
-    if (selectedEvidence?.id === item.id) {
-      setSelectedEvidence(null);
-    }
   }
 
-  function changeStatus(
+  async function changeStatus(
     item: Evidence,
     status: EvidenceStatus
   ) {
-    setEvidence((current) =>
-      current.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              status,
-              reviewedBy:
-                status === "Accepted" ||
-                status === "Rejected"
-                  ? "John Carter"
-                  : entry.reviewedBy,
-            }
-          : entry
-      )
-    );
+    if (!currentWorkspace?.id) return;
+
+    const res = await updateEvidence(currentWorkspace.id, item.auditId, item.id, {
+      status,
+    });
+
+    if (res.success) {
+      setEvidence((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                status,
+                reviewedBy:
+                  status === "Accepted" || status === "Rejected"
+                    ? "John Carter"
+                    : entry.reviewedBy,
+              }
+            : entry
+        )
+      );
+    }
 
     setOpenMenu(null);
   }
@@ -421,9 +391,9 @@ export default function EvidencePage() {
               icon={
                 <Clock3 className="h-4 w-4" />
               }
-              label="Pending Review"
-              value={String(pendingEvidence)}
-              valueClass="text-amber-600"
+              label="Under Review"
+              value={String(underReviewEvidence)}
+              valueClass="text-blue-600"
             />
 
             <SummaryCard
@@ -527,7 +497,13 @@ export default function EvidencePage() {
                 </thead>
 
                 <tbody>
-                  {filteredEvidence.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-12 text-center text-[12px] text-slate-500">
+                        Loading workspace evidence...
+                      </td>
+                    </tr>
+                  ) : filteredEvidence.length > 0 ? (
                     filteredEvidence.map((item) => (
                       <EvidenceRow
                         key={item.id}
@@ -651,6 +627,9 @@ export default function EvidencePage() {
       {showModal && (
         <EvidenceModal
           editing={Boolean(editingEvidence)}
+          audits={audits}
+          auditId={formAuditId}
+          setAuditId={setFormAuditId}
           name={formName}
           type={formType}
           size={formSize}
@@ -825,9 +804,11 @@ function EvidenceRow({
       ? "bg-emerald-50 text-emerald-700"
       : item.status === "Under Review"
         ? "bg-blue-50 text-blue-700"
-        : item.status === "Pending Review"
-          ? "bg-amber-50 text-amber-700"
-          : "bg-red-50 text-red-700";
+        : item.status === "Submitted"
+          ? "bg-indigo-50 text-indigo-700"
+          : item.status === "Requested"
+            ? "bg-amber-50 text-amber-700"
+            : "bg-red-50 text-red-700";
 
   return (
     <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
@@ -991,6 +972,9 @@ function TraceCard({
 
 function EvidenceModal({
   editing,
+  audits,
+  auditId,
+  setAuditId,
   name,
   type,
   size,
@@ -1009,6 +993,9 @@ function EvidenceModal({
   onSave,
 }: {
   editing: boolean;
+  audits: { id: string; name: string }[];
+  auditId: string;
+  setAuditId: (value: string) => void;
   name: string;
   type: string;
   size: string;
@@ -1054,6 +1041,26 @@ function EvidenceModal({
         </div>
 
         <div className="space-y-4 px-6 py-5">
+          {audits && audits.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                Target Audit
+              </label>
+              <select
+                value={auditId}
+                disabled={editing}
+                onChange={(e) => setAuditId(e.target.value)}
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                {audits.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <FormField
             label="Evidence Name"
             value={name}
@@ -1148,7 +1155,7 @@ function EvidenceModal({
           </div>
         </div>
 
-        <div className="flex items-center justifynd gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1269,7 +1276,9 @@ function EvidenceDetails({
         ? "bg-red-50 text-red-700"
         : item.status === "Under Review"
           ? "bg-blue-50 text-blue-700"
-          : "bg-amber-50 text-amber-700";
+          : item.status === "Submitted"
+            ? "bg-indigo-50 text-indigo-700"
+            : "bg-amber-50 text-amber-700";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-6">
