@@ -1,113 +1,300 @@
 "use server";
 
 import db from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { hasPermission, type Permission, type Role } from "@/lib/rbac";
 import { requirePermission } from "@/lib/server-rbac";
 import crypto from "crypto";
 
-// Returns true if the user has the required permission in the workspace
-async function authorize(userId: string, workspaceId: string, permission: Permission) {
-  const membership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
-  if (!membership) return false;
-  return hasPermission(membership.role as Role, permission);
-}
+export type AuditLifecycleStatus =
+  | "Planning"
+  | "Fieldwork"
+  | "Review"
+  | "Reporting"
+  | "Completed";
+
+export const VALID_AUDIT_STATUSES: readonly AuditLifecycleStatus[] = [
+  "Planning",
+  "Fieldwork",
+  "Review",
+  "Reporting",
+  "Completed",
+] as const;
+
+export type CreateAuditInput = {
+  name: string;
+  framework?: string;
+  lead?: string;
+  status?: AuditLifecycleStatus;
+  progress?: number;
+  startDate?: string;
+  dueDate?: string;
+  objective?: string;
+  scope?: string;
+  controls?: number;
+  evidence?: number;
+  findings?: number;
+  risks?: number;
+};
+
+export type UpdateAuditInput = {
+  name?: string;
+  framework?: string;
+  lead?: string;
+  status?: AuditLifecycleStatus;
+  progress?: number;
+  startDate?: string;
+  dueDate?: string;
+  objective?: string;
+  scope?: string;
+  controls?: number;
+  evidence?: number;
+  findings?: number;
+  risks?: number;
+};
 
 export async function getAudits(workspaceId: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-
-  if (!authorize(session.user.id, workspaceId, "audits.view")) {
-    return { error: "Permission denied" };
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
   }
 
-  const audits = db.prepare(`SELECT * FROM audits WHERE workspace_id = ? ORDER BY created_at DESC`).all(workspaceId);
-  return { success: true, data: audits };
+  try {
+    await requirePermission("audits.view", workspaceId);
+    const audits = db
+      .prepare(
+        `SELECT * FROM audits WHERE workspace_id = ? ORDER BY created_at DESC`
+      )
+      .all(workspaceId);
+    return { success: true, data: audits };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch audits";
+    return { success: false, error: message };
+  }
 }
 
 export async function getAudit(workspaceId: string, auditId: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-
-  if (!authorize(session.user.id, workspaceId, "audits.view")) {
-    return { error: "Permission denied" };
+  if (!workspaceId || !auditId) {
+    return { success: false, error: "Workspace ID and Audit ID are required" };
   }
-
-  const audit = db.prepare(`SELECT * FROM audits WHERE id = ? AND workspace_id = ?`).get(auditId, workspaceId);
-  if (!audit) return { error: "Audit not found" };
-
-  return { success: true, data: audit };
-}
-
-export async function createAudit(workspaceId: string, data: any) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-
-  if (!authorize(session.user.id, workspaceId, "audits.create")) {
-    return { error: "Permission denied" };
-  }
-
-  const id = `AUD-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
 
   try {
+    await requirePermission("audits.view", workspaceId);
+    const audit = db
+      .prepare(`SELECT * FROM audits WHERE id = ? AND workspace_id = ?`)
+      .get(auditId, workspaceId);
+
+    if (!audit) {
+      return { success: false, error: "Audit not found" };
+    }
+
+    return { success: true, data: audit };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch audit";
+    return { success: false, error: message };
+  }
+}
+
+export async function createAudit(workspaceId: string, data: CreateAuditInput) {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
+
+  try {
+    await requirePermission("audits.create", workspaceId);
+
+    if (!data.name || !data.name.trim()) {
+      return { success: false, error: "Audit name is required" };
+    }
+
+    const status: AuditLifecycleStatus =
+      data.status && VALID_AUDIT_STATUSES.includes(data.status)
+        ? data.status
+        : "Planning";
+
+    const id = `AUD-${new Date().getFullYear()}-${crypto
+      .randomUUID()
+      .slice(0, 5)
+      .toUpperCase()}`;
+
+    const progress = Math.max(0, Math.min(100, Number(data.progress) || 0));
+    const startDate = data.startDate || new Date().toISOString().split("T")[0];
+    const dueDate =
+      data.dueDate ||
+      new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+    const framework = data.framework || "ISO 27001";
+    const lead = data.lead || "Unassigned";
+    const objective = data.objective || "";
+    const scope = data.scope || "";
+    const controls = Number(data.controls) || 0;
+    const evidence = Number(data.evidence) || 0;
+    const findings = Number(data.findings) || 0;
+    const risks = Number(data.risks) || 0;
+
     db.prepare(`
-      INSERT INTO audits (id, workspace_id, name, framework, lead, status, progress, start_date, due_date, objective, scope, controls, evidence, findings, risks)
+      INSERT INTO audits (
+        id, workspace_id, name, framework, lead, status, progress,
+        start_date, due_date, objective, scope, controls, evidence, findings, risks
+      )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, workspaceId, data.name, data.framework, data.lead, data.status, data.progress || 0,
-      data.startDate, data.dueDate, data.objective, data.scope, data.controls || 0, data.evidence || 0,
-      data.findings || 0, data.risks || 0
+      id,
+      workspaceId,
+      data.name.trim(),
+      framework,
+      lead,
+      status,
+      progress,
+      startDate,
+      dueDate,
+      objective,
+      scope,
+      controls,
+      evidence,
+      findings,
+      risks
     );
-    return { success: true, data: { id, ...data } };
-  } catch (err) {
-    console.error(err);
-    return { error: "Failed to create audit" };
+
+    const createdAudit = {
+      id,
+      workspace_id: workspaceId,
+      name: data.name.trim(),
+      framework,
+      lead,
+      status,
+      progress,
+      start_date: startDate,
+      due_date: dueDate,
+      objective,
+      scope,
+      controls,
+      evidence,
+      findings,
+      risks,
+    };
+
+    return { success: true, data: createdAudit };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to create audit";
+    return { success: false, error: message };
   }
 }
 
-export async function updateAudit(workspaceId: string, auditId: string, updates: any) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-
-  if (!authorize(session.user.id, workspaceId, "audits.update")) {
-    return { error: "Permission denied" };
+export async function updateAudit(
+  workspaceId: string,
+  auditId: string,
+  updates: UpdateAuditInput
+) {
+  if (!workspaceId || !auditId) {
+    return { success: false, error: "Workspace ID and Audit ID are required" };
   }
 
-  const audit = db.prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`).get(auditId, workspaceId);
-  if (!audit) return { error: "Audit not found" };
-
-  const setClause = Object.keys(updates).map(k => {
-    if (k === 'startDate') return 'start_date = ?';
-    if (k === 'dueDate') return 'due_date = ?';
-    return `${k} = ?`;
-  }).join(", ");
-  const values = Object.values(updates);
-
-  if (values.length === 0) return { success: true };
-
   try {
-    db.prepare(`UPDATE audits SET ${setClause} WHERE id = ? AND workspace_id = ?`).run(...values, auditId, workspaceId);
+    await requirePermission("audits.update", workspaceId);
+
+    const existing = db
+      .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
+      .get(auditId, workspaceId);
+
+    if (!existing) {
+      return { success: false, error: "Audit not found" };
+    }
+
+    const setParts: string[] = [];
+    const values: (string | number)[] = [];
+
+    if (updates.name !== undefined) {
+      setParts.push("name = ?");
+      values.push(updates.name.trim());
+    }
+    if (updates.framework !== undefined) {
+      setParts.push("framework = ?");
+      values.push(updates.framework);
+    }
+    if (updates.lead !== undefined) {
+      setParts.push("lead = ?");
+      values.push(updates.lead);
+    }
+    if (updates.status !== undefined) {
+      if (!VALID_AUDIT_STATUSES.includes(updates.status)) {
+        return { success: false, error: "Invalid audit status" };
+      }
+      setParts.push("status = ?");
+      values.push(updates.status);
+    }
+    if (updates.progress !== undefined) {
+      setParts.push("progress = ?");
+      values.push(Math.max(0, Math.min(100, Number(updates.progress) || 0)));
+    }
+    if (updates.startDate !== undefined) {
+      setParts.push("start_date = ?");
+      values.push(updates.startDate);
+    }
+    if (updates.dueDate !== undefined) {
+      setParts.push("due_date = ?");
+      values.push(updates.dueDate);
+    }
+    if (updates.objective !== undefined) {
+      setParts.push("objective = ?");
+      values.push(updates.objective);
+    }
+    if (updates.scope !== undefined) {
+      setParts.push("scope = ?");
+      values.push(updates.scope);
+    }
+    if (updates.controls !== undefined) {
+      setParts.push("controls = ?");
+      values.push(Number(updates.controls) || 0);
+    }
+    if (updates.evidence !== undefined) {
+      setParts.push("evidence = ?");
+      values.push(Number(updates.evidence) || 0);
+    }
+    if (updates.findings !== undefined) {
+      setParts.push("findings = ?");
+      values.push(Number(updates.findings) || 0);
+    }
+    if (updates.risks !== undefined) {
+      setParts.push("risks = ?");
+      values.push(Number(updates.risks) || 0);
+    }
+
+    if (setParts.length === 0) {
+      return { success: true };
+    }
+
+    values.push(auditId, workspaceId);
+    db.prepare(
+      `UPDATE audits SET ${setParts.join(", ")} WHERE id = ? AND workspace_id = ?`
+    ).run(...values);
+
     return { success: true };
-  } catch (err) {
-    return { error: "Failed to update audit" };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to update audit";
+    return { success: false, error: message };
   }
 }
 
 export async function deleteAudit(workspaceId: string, auditId: string) {
-  const session = await getSession();
-  if (!session || !session.user || !workspaceId) return { error: "Unauthorized" };
-
-  if (!authorize(session.user.id, workspaceId, "audits.delete")) {
-    return { error: "Permission denied" };
+  if (!workspaceId || !auditId) {
+    return { success: false, error: "Workspace ID and Audit ID are required" };
   }
 
-  const audit = db.prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`).get(auditId, workspaceId);
-  if (!audit) return { error: "Audit not found" };
-
   try {
-    db.prepare(`DELETE FROM audits WHERE id = ? AND workspace_id = ?`).run(auditId, workspaceId);
+    await requirePermission("audits.delete", workspaceId);
+
+    const existing = db
+      .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
+      .get(auditId, workspaceId);
+
+    if (!existing) {
+      return { success: false, error: "Audit not found" };
+    }
+
+    db.prepare(`DELETE FROM audits WHERE id = ? AND workspace_id = ?`).run(
+      auditId,
+      workspaceId
+    );
     return { success: true };
-  } catch (err) {
-    return { error: "Failed to delete audit" };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete audit";
+    return { success: false, error: message };
   }
 }

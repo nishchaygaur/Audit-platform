@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
-  AlertTriangle,
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
@@ -17,9 +16,7 @@ import {
   FileCheck2,
   FileText,
   FileWarning,
-  LayoutDashboard,
   MoreHorizontal,
-  Plus,
   Search,
   ShieldAlert,
   TriangleAlert,
@@ -325,55 +322,111 @@ const tabs = [
 
 export default function AuditDetailsPage() {
   const params = useParams<{ id: string }>();
+  const { currentWorkspace } = useWorkspace();
+  const { getAudit, updateAudit, loading } = useAudits();
 
-  const workspace = useWorkspace();
-
-  const { getAudit, updateAudit } = useAudits();
-
-  const auditId = params.id;
-
+  const auditId = params?.id || "";
   const audit = getAudit(auditId);
 
   const [activeTab, setActiveTab] = useState("Overview");
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    framework: "",
+    lead: "",
+    status: "Planning" as Audit["status"],
+    progress: 0,
+    startDate: "",
+    dueDate: "",
+    objective: "",
+    scope: "",
+  });
 
-  if (!audit) {
+  const handleStatusChange = async (status: Audit["status"]) => {
+    if (!auditId) return;
+    await updateAudit(auditId, { status });
+  };
+
+  const handleOpenEditModal = () => {
+    if (!audit) return;
+    setEditForm({
+      name: audit.name,
+      framework: audit.framework,
+      lead: audit.lead,
+      status: audit.status,
+      progress: audit.progress,
+      startDate: audit.startDate,
+      dueDate: audit.dueDate,
+      objective: audit.objective,
+      scope: audit.scope,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!auditId) return;
+    await updateAudit(auditId, editForm);
+    setShowEditModal(false);
+  };
+
+  if (loading) {
     return (
-      <div className="flex h-full items-center justify-center p-8">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-slate-800">Audit Not Found</h2>
-          <p className="mt-2 text-slate-500">The audit you are looking for does not exist or you do not have permission to view it.</p>
-        </div>
+      <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">
+        <main className="ml-[250px] min-h-screen">
+          <Header />
+          <section className="px-8 py-7">
+            <Link
+              href="/audits"
+              className="mb-5 inline-flex items-center gap-2 text-[12px] font-medium text-slate-500 transition hover:text-blue-600"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Audits
+            </Link>
+            <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+              <p className="text-[13px] font-medium text-slate-500">Loading audit details...</p>
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
 
-  const handleStatusChange = (status: Audit["status"]) => {
-    updateAudit(auditId, {
-      status,
-    });
-  };
+  if (!audit) {
+    return (
+      <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">
+        <main className="ml-[250px] min-h-screen">
+          <Header />
+          <section className="px-8 py-7">
+            <Link
+              href="/audits"
+              className="mb-5 inline-flex items-center gap-2 text-[12px] font-medium text-slate-500 transition hover:text-blue-600"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Audits
+            </Link>
+            <div className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-white p-12 text-center shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <ClipboardCheck className="h-6 w-6" />
+              </div>
+              <h2 className="mt-4 text-base font-semibold text-slate-800">Audit Not Found</h2>
+              <p className="mt-1 max-w-md text-xs text-slate-500">
+                The audit you are looking for does not exist or you do not have permission to view it in this workspace.
+              </p>
+              <Link
+                href="/audits"
+                className="mt-5 inline-flex h-9 items-center rounded-md bg-blue-600 px-4 text-xs font-medium text-white transition hover:bg-blue-700"
+              >
+                Return to Audits List
+              </Link>
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
-  const handleProgressChange = (progress: number) => {
-    updateAudit(auditId, {
-      progress: Math.max(0, Math.min(100, progress)),
-    });
-  };
-
-  const workspaceValue =
-    typeof workspace === "object" &&
-    workspace !== null &&
-    "currentWorkspace" in workspace
-      ? workspace.currentWorkspace
-      : null;
-
-  const workspaceName =
-    typeof workspaceValue === "string"
-      ? workspaceValue
-      : typeof workspaceValue === "object" &&
-          workspaceValue !== null &&
-          "name" in workspaceValue
-        ? String(workspaceValue.name)
-        : audit.workspace ?? "ABC Technologies";
+  const workspaceName = currentWorkspace?.name || audit.workspace || "Workspace";
 
   const statusClass =
     audit.status === "Completed"
@@ -383,8 +436,10 @@ export default function AuditDetailsPage() {
         : audit.status === "Planning"
           ? "bg-slate-100 text-slate-600"
           : audit.status === "Reporting"
-            ? "bg-slate-100 text-slate-600"
-            : "bg-blue-50 text-blue-700";
+            ? "bg-purple-50 text-purple-700"
+            : audit.status === "Fieldwork"
+              ? "bg-amber-50 text-amber-700"
+              : "bg-slate-100 text-slate-600";
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">
@@ -442,16 +497,45 @@ export default function AuditDetailsPage() {
               </div>
 
               <div className="ml-4 flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                  Actions
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                    className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                    Status
+                    <ChevronDown className="h-3 w-3 text-slate-400" />
+                  </button>
+
+                  {showActionsDropdown && (
+                    <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Change Status
+                      </div>
+                      {(["Planning", "Fieldwork", "Review", "Reporting", "Completed"] as const).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => {
+                            handleStatusChange(st);
+                            setShowActionsDropdown(false);
+                          }}
+                          className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] transition hover:bg-slate-50 ${
+                            audit.status === st ? "font-semibold text-blue-600" : "text-slate-700"
+                          }`}
+                        >
+                          <span>{st}</span>
+                          {audit.status === st && <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <button
                   type="button"
+                  onClick={handleOpenEditModal}
                   className="flex h-9 items-center rounded-md bg-blue-600 px-4 text-[12px] font-medium text-white transition hover:bg-blue-700"
                 >
                   Edit Audit
@@ -535,6 +619,145 @@ export default function AuditDetailsPage() {
           {activeTab === "Reports" && <ReportsPanel audit={audit} />}
         </section>
       </main>
+
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+          <div className="flex max-h-[92vh] w-full max-w-[600px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div>
+                <h3 className="text-[15px] font-semibold text-slate-800">Edit Audit Details</h3>
+                <p className="text-[11px] text-slate-400">Update audit lifecycle metadata and scope</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">Audit Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Framework</label>
+                  <input
+                    type="text"
+                    value={editForm.framework}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, framework: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Audit Lead</label>
+                  <input
+                    type="text"
+                    value={editForm.lead}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, lead: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as Audit["status"] }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  >
+                    <option value="Planning">Planning</option>
+                    <option value="Fieldwork">Fieldwork</option>
+                    <option value="Review">Review</option>
+                    <option value="Reporting">Reporting</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Progress ({editForm.progress}%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editForm.progress}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, progress: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={editForm.startDate}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Due Date</label>
+                  <input
+                    type="text"
+                    value={editForm.dueDate}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">Objective</label>
+                <textarea
+                  rows={2}
+                  value={editForm.objective}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, objective: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">Scope</label>
+                <textarea
+                  rows={2}
+                  value={editForm.scope}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, scope: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-3.5 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="rounded-md border border-slate-200 px-3.5 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                className="rounded-md bg-blue-600 px-4 py-1.5 text-[12px] font-medium text-white hover:bg-blue-700"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1112,7 +1335,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
     const allEvidence = getStoredEvidence();
     const filtered = allEvidence.filter((e) => e.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEvidenceList(filtered);
     } else {
       // Create sensible defaults for this audit if none yet stored
@@ -1618,7 +1841,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
     const all = getStoredFindings();
     const filtered = all.filter((f) => f.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFindingsList(filtered);
     } else {
       const defaults: Finding[] = [
@@ -2177,7 +2400,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
     const all = getStoredRisks();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRisksList(filtered);
     } else {
       const defaults: RiskItem[] = [
@@ -2581,7 +2804,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
     const all = getStoredRemediation();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActionsList(filtered);
     } else {
       const defaults: RemediationItem[] = [
@@ -2602,7 +2825,7 @@ function RemediationPanel({ audit }: { audit: Audit }) {
           createdDate: "06 May 2024",
         },
       ];
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActionsList(defaults);
       saveStoredRemediation([...all, ...defaults]);
     }
@@ -3018,7 +3241,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
     const all = getStoredReports();
     const filtered = all.filter((r) => r.auditId === audit.id);
     if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReportsList(filtered);
     } else {
       const defaults: ReportItem[] = [
@@ -3065,7 +3288,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
           },
         },
       ];
-      // eslint-disable-next-line react-hooks/set-state-inffect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReportsList(defaults);
       saveStoredReports([...all, ...defaults]);
     }

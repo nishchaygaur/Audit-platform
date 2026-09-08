@@ -95,183 +95,6 @@ const FRAMEWORK_CONTROLS: Record<string, FrameworkControl[]> = {
 };
 
 /* ============================================================
-   AUDIT DATA
-============================================================ */
-
-// type Audit = {
-//   id: string;
-//   name: string;
-//   framework: string;
-//   lead: string;
-//   status: string;
-//   progress: number;
-//   startDate: string;
-//   dueDate: string;
-//   objective: string;
-//   scope: string;
-//   controls: number;
-//   evidence: number;
-//   findings: number;
-//   risks: number;
-//   workspace: string;
-// };
-
-// const initialAudits: Audit[] = [
-//   {
-//     id: "AUD-2024-001",
-//     name: "ISO 27001 Internal Audit",
-//     framework: "ISO 27001",
-//     lead: "Alice Smith",
-//     status: "In Progress",
-//     progress: 68,
-//     startDate: "01 May 2024",
-//     dueDate: "12 Jun 2024",
-//     objective:
-//       "Assess the organization's Information Security Management System against ISO 27001 requirements and identify areas requiring improvement.",
-//     scope:
-//       "Information security management system, access control, asset management, supplier relationships, incident management and business continuity.",
-//     controls: 114,
-//     evidence: 86,
-//     findings: 7,
-//     risks: 3,
-//     workspace: "ABC Technologies",
-//   },
-//   {
-//     id: "AUD-2024-002",
-//     name: "NIST CSF Assessment",
-//     framework: "NIST CSF",
-//     lead: "John Carter",
-//     status: "In Review",
-//     progress: 86,
-//     startDate: "06 May 2024",
-//     dueDate: "15 Jun 2024",
-//     objective:
-//       "Evaluate the organization's cybersecurity posture against the NIST Cybersecurity Framework.",
-//     scope:
-//       "Identify, Protect, Detect, Respond and Recover functions across the organization's information systems.",
-//     controls: 108,
-//     evidence: 94,
-//     findings: 4,
-//     risks: 2,
-//     workspace: "ABC Technologies",
-//   },
-//   {
-//     id: "AUD-2024-003",
-//     name: "Vendor Risk Assessment",
-//     framework: "ISO 27001",
-//     lead: "Emily Davis",
-//     status: "Planning",
-//     progress: 0,
-//     startDate: "20 May 2024",
-//     dueDate: "20 Jun 2024",
-//     objective:
-//       "Assess information-security risks associated with critical third-party suppliers.",
-//     scope:
-//       "Supplier security controls, contracts, data protection, access management and supplier monitoring.",
-//     controls: 42,
-//     evidence: 0,
-//     findings: 0,
-//     risks: 4,
-//     workspace: "ABC Technologies",
-//   },
-//   {
-//     id: "AUD-2024-004",
-//     name: "Access Control Review",
-//     framework: "NIST 800-53",
-//     lead: "Michael Lee",
-//     status: "Completed",
-//     progress: 100,
-//     startDate: "01 May 2024",
-//     dueDate: "05 Jun 2024",
-//     objective:
-//       "Review logical and physical access controls and verify implementation against applicable security requirements.",
-//     scope:
-//       "Identity management, authentication, authorization, privileged access and account lifecycle management.",
-//     controls: 58,
-//     evidence: 58,
-//     findings: 6,
-//     risks: 1,
-//     workspace: "ABC Technologies",
-//   },
-//   {
-//     id: "AUD-2024-005",
-//     name: "Risk Management Assessment",
-//     framework: "NIST RMF",
-//     lead: "Alice Smith",
-//     status: "In Progress",
-//     progress: 42,
-//     startDate: "15 May 2024",
-//     dueDate: "25 Jun 2024",
-//     objective:
-//       "Evaluate the organization's risk management process using the NIST Risk Management Framework.",
-//     scope:
-//       "Categorize, select, implement, assess, authorize and continuously monitor information systems.",
-//     controls: 76,
-//     evidence: 31,
-//     findings: 3,
-//     risks: 5,
-//     workspace: "ABC Technologies",
-//   },
-//   {
-//     id: "AUD-2024-011",
-//     name: "Financial Security Controls Review",
-//     framework: "SOC 2",
-//     lead: "Sarah Brown",
-//     status: "In Progress",
-//     progress: 57,
-//     startDate: "03 May 2024",
-//     dueDate: "28 Jun 2024",
-//     objective:
-//       "Assess security and availability controls supporting financial systems and services.",
-//     scope:
-//       "Financial applications, identity controls, change management, monitoring and service operations.",
-//     controls: 91,
-//     evidence: 47,
-//     findings: 5,
-//     risks: 3,
-//     workspace: "XYZ Finance",
-//   },
-//   {
-//     id: "AUD-2024-012",
-//     name: "Incident Response Assessment",
-//     framework: "NIST CSF",
-//     lead: "David Wilson",
-//     status: "In Review",
-//     progress: 74,
-//     startDate: "08 May 2024",
-//     dueDate: "30 Jun 2024",
-//     objective:
-//       "Evaluate incident response capabilities and supporting cybersecurity processes.",
-//     scope:
-//       "Incident detection, response procedures, communications, recovery and lessons learned.",
-//     controls: 63,
-//     evidence: 51,
-//     findings: 4,
-//     risks: 2,
-//     workspace: "XYZ Finance",
-//   },
-//   {
-//     id: "AUD-2024-021",
-//     name: "Healthcare Information Security Audit",
-//     framework: "ISO 27001",
-//     lead: "Michael Lee",
-//     status: "In Progress",
-//     progress: 49,
-//     startDate: "04 May 2024",
-//     dueDate: "30 Jun 2024",
-//     objective:
-//       "Assess information security controls supporting healthcare information systems.",
-//     scope:
-//       "Clinical applications, patient information systems, identity management, logging and suppliers.",
-//     controls: 127,
-//     evidence: 59,
-//     findings: 8,
-//     risks: 5,
-//     workspace: "PQR Healthcare",
-//   },
-// ];
-
-/* ============================================================
    HELPERS
 ============================================================ */
 
@@ -283,11 +106,14 @@ function getStatusClass(status: string) {
     case "Review":
       return "bg-blue-50 text-blue-700";
 
-    case "Not Started":
+    case "Planning":
       return "bg-slate-100 text-slate-600";
 
     case "Fieldwork":
       return "bg-amber-50 text-amber-700";
+
+    case "Reporting":
+      return "bg-purple-50 text-purple-700";
 
     default:
       return "bg-slate-100 text-slate-600";
@@ -302,7 +128,7 @@ export default function AuditsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const workspace = useWorkspace();
-  const { audits, addAudit } = useAudits();
+  const { audits, addAudit, loading: auditsLoading } = useAudits();
   const workspaceValue =
     typeof workspace === "object" &&
     workspace !== null &&
@@ -317,7 +143,7 @@ export default function AuditsPage() {
           workspaceValue !== null &&
           "name" in workspaceValue
         ? String(workspaceValue.name)
-        : "ABC Technologies";
+        : "Workspace";
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
@@ -329,7 +155,7 @@ export default function AuditsPage() {
   const [newAudit, setNewAudit] = useState({
     name: "",
     framework: "ISO 27001",
-    lead: "Alice Smith",
+    lead: user?.name || "Alice Smith",
     startDate: "",
     dueDate: "",
     objective: "",
@@ -373,9 +199,7 @@ export default function AuditsPage() {
     );
   };
 
-  const workspaceAudits = useMemo(() => {
-    return audits.filter((audit) => audit.workspace === workspaceName);
-  }, [audits, workspaceName]);
+  const workspaceAudits = audits;
 
   const filteredAudits = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -606,9 +430,10 @@ export default function AuditsPage() {
                   value={statusFilter}
                   options={[
                     "All Statuses",
-                    "In Progress",
-                    "In Review",
                     "Planning",
+                    "Fieldwork",
+                    "Review",
+                    "Reporting",
                     "Completed",
                   ]}
                   onChange={setStatusFilter}
@@ -874,28 +699,34 @@ export default function AuditsPage() {
             </div>
 
             {/* ==================================================
-                EMPTY STATE
+                EMPTY / LOADING STATE
             ================================================== */}
 
-            {filteredAudits.length === 0 && (
-
+            {auditsLoading ? (
               <div className="px-5 py-14 text-center">
-
+                <p className="text-[13px] font-medium text-slate-500">
+                  Loading audits...
+                </p>
+              </div>
+            ) : filteredAudits.length === 0 ? (
+              <div className="px-5 py-14 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
                   <Search className="h-5 w-5 text-slate-400" />
                 </div>
 
                 <p className="mt-3 text-[13px] font-medium text-slate-700">
-                  No audits found
+                  {workspaceAudits.length === 0
+                    ? "No audits in this workspace yet"
+                    : "No audits found"}
                 </p>
 
                 <p className="mt-1 text-[11px] text-slate-400">
-                  Try changing your search or filters.
+                  {workspaceAudits.length === 0
+                    ? "Get started by creating your first audit for this workspace."
+                    : "Try changing your search or filters."}
                 </p>
-
               </div>
-
-            )}
+            ) : null}
 
             {/* ==================================================
                 FOOTER
