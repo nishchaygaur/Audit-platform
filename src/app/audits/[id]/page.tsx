@@ -37,8 +37,6 @@ import {
   type ReportItem,
   getStoredEvidence,
   saveStoredEvidence,
-  getStoredFindings,
-  saveStoredFindings,
   getStoredRisks,
   saveStoredRisks,
   getStoredRemediation,
@@ -46,6 +44,11 @@ import {
   getStoredReports,
   saveStoredReports,
 } from "@/lib/grcData";
+import {
+  getFindings,
+  createFinding,
+  updateFinding,
+} from "@/actions/findings";
 
 /* ============================================================
    FALLBACK AUDIT DATA
@@ -1820,6 +1823,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
 ============================================================ */
 
 function FindingsPanel({ audit }: { audit: Audit }) {
+  const { currentWorkspace } = useWorkspace();
   const [findingsList, setFindingsList] = useState<Finding[]>([]);
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("All Severity");
@@ -1837,36 +1841,36 @@ function FindingsPanel({ audit }: { audit: Audit }) {
   const [formDueDate, setFormDueDate] = useState("30 Jun 2024");
   const [formRecommendation, setFormRecommendation] = useState("");
 
-  useEffect(() => {
-    const all = getStoredFindings();
-    const filtered = all.filter((f) => f.auditId === audit.id);
-    if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFindingsList(filtered);
-    } else {
-      const defaults: Finding[] = [
-        {
-          id: `FND-${audit.id.replace("AUD-", "")}-001`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          title: `Control deficiency identified in ${audit.framework} evaluation`,
-          description: "Sample access reviews were missing management sign-off.",
-          severity: "High",
-          status: "Open",
-          framework: audit.framework,
-          control: "A.5.15",
-          owner: audit.lead,
-          auditor: "John Carter",
-          identified: "05 May 2024",
-          dueDate: "20 Jun 2024",
-          evidence: "EVD-2024-002",
-          recommendation: "Establish automated recurring approvals with 30-day escalation.",
-        },
-      ];
-      setFindingsList(defaults);
-      saveStoredFindings([...all, ...defaults]);
+  const loadFindings = async () => {
+    if (!currentWorkspace?.id || !audit?.id) return;
+    const res = await getFindings(currentWorkspace.id, audit.id);
+    if (res.success && res.data) {
+      setFindingsList(
+        res.data.map((f: any) => ({
+          id: f.id,
+          findingId: f.reference,
+          workspaceId: f.workspace_id,
+          auditId: f.audit_id,
+          title: f.title,
+          description: f.description,
+          severity: f.severity,
+          status: f.status,
+          framework: f.framework,
+          control: f.control,
+          owner: f.owner,
+          auditor: f.auditor || "John Carter",
+          identified: f.identified_date,
+          dueDate: f.due_date,
+          evidence: f.evidence || "",
+          recommendation: f.recommendation || "",
+        }))
+      );
     }
-  }, [audit.id, audit.framework, audit.lead]);
+  };
+
+  useEffect(() => {
+    loadFindings();
+  }, [currentWorkspace?.id, audit?.id]);
 
   const filteredFindings = useMemo(() => {
     return findingsList.filter((item) => {
@@ -1890,17 +1894,11 @@ function FindingsPanel({ audit }: { audit: Audit }) {
     (f) => f.status === "Open" || f.status === "In Progress"
   ).length;
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle.trim()) return;
+    if (!formTitle.trim() || !currentWorkspace?.id) return;
 
-    const all = getStoredFindings();
-    const nextNum = all.length + 1;
-    const newId = `FND-2024-${String(nextNum).padStart(3, "0")}`;
-
-    const newFinding: Finding = {
-      id: newId,
-      workspaceId: "abc-technologies",
+    const res = await createFinding(currentWorkspace.id, {
       auditId: audit.id,
       title: formTitle.trim(),
       description: formDesc || "Identified during audit testing.",
@@ -1909,35 +1907,28 @@ function FindingsPanel({ audit }: { audit: Audit }) {
       framework: audit.framework,
       control: formControl,
       owner: formOwner,
-      auditor: "John Carter",
-      identified: "Today",
       dueDate: formDueDate,
-      evidence: "EVD-2024-001",
       recommendation:
         formRecommendation || "Implement corrective remediation measures according to policy.",
-    };
+    });
 
-    const updatedAll = [newFinding, ...all];
-    saveStoredFindings(updatedAll);
-    setFindingsList([newFinding, ...findingsList]);
-    setShowAddModal(false);
-    setFormTitle("");
-    setFormDesc("");
-    setFormRecommendation("");
+    if (res.success) {
+      await loadFindings();
+      setShowAddModal(false);
+      setFormTitle("");
+      setFormDesc("");
+      setFormRecommendation("");
+    }
   };
 
-  const updateStatus = (id: string, newStatus: Finding["status"]) => {
-    const updated = findingsList.map((item) =>
-      item.id === id ? { ...item, status: newStatus } : item
-    );
-    setFindingsList(updated);
-    const all = getStoredFindings();
-    const updatedAll = all.map((item) =>
-      item.id === id ? { ...item, status: newStatus } : item
-    );
-    saveStoredFindings(updatedAll);
-    if (selectedFinding && selectedFinding.id === id) {
-      setSelectedFinding({ ...selectedFinding, status: newStatus });
+  const updateStatus = async (id: string, newStatus: Finding["status"]) => {
+    if (!currentWorkspace?.id) return;
+    const res = await updateFinding(currentWorkspace.id, id, { status: newStatus }, audit.id);
+    if (res.success) {
+      await loadFindings();
+      if (selectedFinding && selectedFinding.id === id) {
+        setSelectedFinding({ ...selectedFinding, status: newStatus });
+      }
     }
   };
 
@@ -3299,7 +3290,6 @@ function ReportsPanel({ audit }: { audit: Audit }) {
     if (!formName.trim()) return;
 
     const allReports = getStoredReports();
-    const allFindings = getStoredFindings().filter((f) => f.auditId === audit.id);
     const allEvidence = getStoredEvidence().filter((e) => e.auditId === audit.id);
     const allRisks = getStoredRisks().filter((r) => r.auditId === audit.id);
     const allRem = getStoredRemediation().filter((r) => r.auditId === audit.id);
@@ -3323,7 +3313,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
         controlsCount: audit.controls,
         compliantCount: Math.round(audit.controls * 0.72),
         evidenceCount: allEvidence.length || audit.evidence,
-        findingsCount: allFindings.length || audit.findings,
+        findingsCount: audit.findings,
         risksCount: allRisks.length || audit.risks,
         remediationCount: allRem.length || 3,
       },

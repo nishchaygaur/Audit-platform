@@ -71,6 +71,9 @@ db.exec(`
     identified_date TEXT NOT NULL,
     due_date TEXT NOT NULL,
     status TEXT NOT NULL,
+    recommendation TEXT DEFAULT '',
+    evidence TEXT DEFAULT '',
+    auditor TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
@@ -143,6 +146,18 @@ if (!evidenceColumns.includes("framework")) {
 }
 if (!evidenceColumns.includes("reviewed_by")) {
   db.exec("ALTER TABLE evidence ADD COLUMN reviewed_by TEXT DEFAULT ''");
+}
+
+// Safe migrations for findings columns
+const findingColumns = (db.pragma("table_info(findings)") as { name: string }[]).map((c) => c.name);
+if (!findingColumns.includes("recommendation")) {
+  db.exec("ALTER TABLE findings ADD COLUMN recommendation TEXT DEFAULT ''");
+}
+if (!findingColumns.includes("evidence")) {
+  db.exec("ALTER TABLE findings ADD COLUMN evidence TEXT DEFAULT ''");
+}
+if (!findingColumns.includes("auditor")) {
+  db.exec("ALTER TABLE findings ADD COLUMN auditor TEXT DEFAULT ''");
 }
 
 export default db;

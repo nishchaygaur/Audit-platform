@@ -1,7 +1,17 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { getFindings } from "@/actions/findings";
+import Link from "next/link";
+import {
+  getFindings,
+  createFinding,
+  updateFinding,
+  deleteFinding as apiDeleteFinding,
+  type FindingSeverity,
+  type FindingStatus,
+  VALID_FINDING_SEVERITIES,
+  VALID_FINDING_STATUSES,
+} from "@/actions/findings";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
@@ -26,17 +36,8 @@ import {
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
-type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
-
-type FindingStatus =
-  | "Open"
-  | "In Progress"
-  | "Resolved"
-  | "Accepted"
-  | "Closed";
-
 type Finding = {
-  id: number;
+  id: string;
   reference: string;
   title: string;
   description: string;
@@ -58,222 +59,55 @@ const FRAMEWORKS = [
   "CIS Controls",
 ];
 
-const SEVERITY_OPTIONS: FindingSeverity[] = [
-  "Critical",
-  "High",
-  "Medium",
-  "Low",
-];
+const [...SEVERITY_OPTIONS] = VALID_FINDING_SEVERITIES;
 
-const STATUS_OPTIONS: FindingStatus[] = [
-  "Open",
-  "In Progress",
-  "Resolved",
-  "Accepted",
-  "Closed",
-];
-
-const INITIAL_FINDINGS: Record<string, Finding[]> = {
-  "abc-technologies": [
-    {
-      id: 1,
-      reference: "FND-2024-001",
-      title: "Privileged accounts lack MFA",
-      description:
-        "Several privileged administrator accounts are not protected by multi-factor authentication.",
-      framework: "ISO 27001",
-      control: "A.5.17",
-      severity: "Critical",
-      owner: "Alice Smith",
-      identifiedDate: "06 May 2024",
-      dueDate: "31 May 2024",
-      status: "Open",
-    },
-    {
-      id: 2,
-      reference: "FND-2024-002",
-      title: "Incomplete access review evidence",
-      description:
-        "Quarterly user access reviews were performed, but supporting approval evidence was incomplete.",
-      framework: "NIST 800-53",
-      control: "AC-2",
-      severity: "High",
-      owner: "John Carter",
-      identifiedDate: "10 May 2024",
-      dueDate: "07 Jun 2024",
-      status: "In Progress",
-    },
-    {
-      id: 3,
-      reference: "FND-2024-003",
-      title: "Security awareness records outdated",
-      description:
-        "Training records for a number of employees have not been updated following role changes.",
-      framework: "ISO 27001",
-      control: "A.6.3",
-      severity: "Medium",
-      owner: "Emily Davis",
-      identifiedDate: "14 May 2024",
-      dueDate: "14 Jun 2024",
-      status: "In Progress",
-    },
-    {
-      id: 4,
-      reference: "FND-2024-004",
-      title: "Asset inventory contains stale records",
-      description:
-        "The information asset register contains systems that have been retired but remain listed as active.",
-      framework: "NIST CSF",
-      control: "ID.AM",
-      severity: "Low",
-      owner: "Michael Lee",
-      identifiedDate: "18 May 2024",
-      dueDate: "28 Jun 2024",
-      status: "Resolved",
-    },
-    {
-      id: 5,
-      reference: "FND-2024-005",
-      title: "Vendor risk assessment not completed",
-      description:
-        "The annual security assessment for a critical third-party service provider remains outstanding.",
-      framework: "SOC 2",
-      control: "CC3.2",
-      severity: "High",
-      owner: "Alice Smith",
-      identifiedDate: "21 May 2024",
-      dueDate: "21 Jun 2024",
-      status: "Open",
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: 11,
-      reference: "FND-2024-011",
-      title: "Excessive user permissions",
-      description:
-        "Several users retain access permissions that are no longer required for their current roles.",
-      framework: "ISO 27001",
-      control: "A.5.15",
-      severity: "High",
-      owner: "Sarah Brown",
-      identifiedDate: "05 May 2024",
-      dueDate: "05 Jun 2024",
-      status: "Open",
-    },
-    {
-      id: 12,
-      reference: "FND-2024-012",
-      title: "Incident response documentation incomplete",
-      description:
-        "Incident response procedures do not document escalation requirements for all critical scenarios.",
-      framework: "NIST CSF",
-      control: "RS.MA",
-      severity: "Medium",
-      owner: "David Wilson",
-      identifiedDate: "12 May 2024",
-      dueDate: "30 Jun 2024",
-      status: "In Progress",
-    },
-    {
-      id: 13,
-      reference: "FND-2024-013",
-      title: "Backup restoration test overdue",
-      description:
-        "A scheduled disaster recovery restoration test was not completed within the defined testing period.",
-      framework: "NIST RMF",
-      control: "CP-4",
-      severity: "High",
-      owner: "Sarah Brown",
-      identifiedDate: "17 May 2024",
-      dueDate: "20 Jun 2024",
-      status: "Open",
-    },
-    {
-      id: 14,
-      reference: "FND-2024-014",
-      title: "Security policy acknowledgement gap",
-      description:
-        "A small number of employees have not acknowledged the latest information security policy.",
-      framework: "SOC 2",
-      control: "CC2.2",
-      severity: "Low",
-      owner: "David Wilson",
-      identifiedDate: "20 May 2024",
-      dueDate: "30 Jun 2024",
-      status: "Resolved",
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: 21,
-      reference: "FND-2024-021",
-      title: "Clinical application accounts not reviewed",
-      description:
-        "Periodic access review for several clinical applications was not completed on schedule.",
-      framework: "ISO 27001",
-      control: "A.5.18",
-      severity: "Critical",
-      owner: "Michael Lee",
-      identifiedDate: "04 May 2024",
-      dueDate: "31 May 2024",
-      status: "Open",
-    },
-    {
-      id: 22,
-      reference: "FND-2024-022",
-      title: "Logging coverage inconsistent",
-      description:
-        "Security event logging is not consistently enabled across several supporting infrastructure components.",
-      framework: "NIST 800-53",
-      control: "AU-2",
-      severity: "High",
-      owner: "Emily Davis",
-      identifiedDate: "11 May 2024",
-      dueDate: "15 Jun 2024",
-      status: "In Progress",
-    },
-    {
-      id: 23,
-      reference: "FND-2024-023",
-      title: "Supplier security clauses missing",
-      description:
-        "Some supplier agreements do not contain the required information security provisions.",
-      framework: "NIST RMF",
-      control: "SA-9",
-      severity: "Medium",
-      owner: "John Carter",
-      identifiedDate: "19 May 2024",
-      dueDate: "30 Jun 2024",
-      status: "Open",
-    },
-  ],
-};
+const [...STATUS_OPTIONS] = VALID_FINDING_STATUSES;
 
 export default function FindingsPage() {
   const { currentWorkspace } = useWorkspace();
-
   const workspaceId = currentWorkspace.id;
-
-  const [findings, setFindings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const params = useParams();
-  
-  useEffect(() => {
-    if (workspaceId && params.id) {
-      getFindings(workspaceId, params.id as string).then((res: any) => {
+  const auditId = params?.id as string;
+
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadFindings = useCallback(async () => {
+    if (workspaceId && auditId) {
+      setLoading(true);
+      try {
+        const res = await getFindings(workspaceId, auditId);
         if (res.success && res.data) {
-          setFindings(res.data.map((f: any) => ({ ...f, reference: f.reference, identifiedDate: f.identified_date, dueDate: f.due_date })));
+          setFindings(
+            res.data.map((f: any) => ({
+              id: f.id,
+              reference: f.reference,
+              title: f.title,
+              description: f.description,
+              framework: f.framework,
+              control: f.control,
+              severity: f.severity,
+              owner: f.owner,
+              identifiedDate: f.identified_date,
+              dueDate: f.due_date,
+              status: f.status,
+            }))
+          );
+        } else {
+          setFindings([]);
         }
+      } finally {
         setLoading(false);
-      });
+      }
     } else {
       setFindings([]);
       setLoading(false);
     }
-  }, [workspaceId, params.id]);
+  }, [workspaceId, auditId]);
+
+  useEffect(() => {
+    loadFindings();
+  }, [loadFindings]);
 
   const [search, setSearch] = useState("");
 
@@ -293,7 +127,7 @@ export default function FindingsPage() {
   const [editingFinding, setEditingFinding] =
     useState<Finding | null>(null);
 
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const [formReference, setFormReference] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -362,7 +196,7 @@ export default function FindingsPage() {
 
   const resolvedFindings = findings.filter(
     (finding) =>
-      finding.status === "Resolved" ||
+      finding.status === "Remediated" ||
       finding.status === "Closed"
   ).length;
 
@@ -403,41 +237,49 @@ export default function FindingsPage() {
     setShowModal(true);
   }
 
-  function saveFinding() {
-    if (!formTitle.trim()) {
+  async function saveFinding() {
+    if (!formTitle.trim() || !workspaceId || !auditId) {
       return;
     }
 
-    const reference =
-      formReference.trim() ||
-      `FND-${new Date().getFullYear()}-${String(
-        Date.now()
-      ).slice(-4)}`;
-
-    const newFinding: Finding = {
-      id: editingFinding?.id ?? Date.now(),
-      reference,
-      title: formTitle.trim(),
-      description: formDescription.trim(),
-      framework: formFramework,
-      control: formControl.trim() || "Not specified",
-      severity: formSeverity,
-      owner: formOwner.trim() || "Unassigned",
-      identifiedDate:
-        formIdentifiedDate || "Not specified",
-      dueDate: formDueDate || "Not specified",
-      status: formStatus,
-    };
-
     if (editingFinding) {
-      setFindings((current) => current.map(
-          (finding) =>
-            finding.id === editingFinding.id
-              ? newFinding
-              : finding
-        ));
+      const res = await updateFinding(
+        workspaceId,
+        editingFinding.id,
+        {
+          reference: formReference.trim() || undefined,
+          title: formTitle.trim(),
+          description: formDescription.trim(),
+          framework: formFramework,
+          control: formControl.trim() || "Not specified",
+          severity: formSeverity,
+          owner: formOwner.trim() || "Unassigned",
+          identifiedDate: formIdentifiedDate || undefined,
+          dueDate: formDueDate || "Not specified",
+          status: formStatus,
+        },
+        auditId
+      );
+      if (res.success) {
+        await loadFindings();
+      }
     } else {
-      setFindings((current) => [newFinding, ...current]);
+      const res = await createFinding(workspaceId, {
+        auditId,
+        reference: formReference.trim() || undefined,
+        title: formTitle.trim(),
+        description: formDescription.trim(),
+        framework: formFramework,
+        control: formControl.trim() || "Not specified",
+        severity: formSeverity,
+        owner: formOwner.trim() || "Unassigned",
+        identifiedDate: formIdentifiedDate || undefined,
+        dueDate: formDueDate || "Not specified",
+        status: formStatus,
+      });
+      if (res.success) {
+        await loadFindings();
+      }
     }
 
     setShowModal(false);
@@ -445,29 +287,37 @@ export default function FindingsPage() {
     resetForm();
   }
 
-  function deleteFinding(finding: Finding) {
+  async function deleteFinding(finding: Finding) {
     const confirmed = window.confirm(
       `Remove "${finding.reference}" from this workspace?`
     );
 
-    if (!confirmed) {
+    if (!confirmed || !workspaceId || !auditId) {
       return;
     }
 
-    setFindings((current) => current.filter((item) => item.id !== finding.id));
+    const res = await apiDeleteFinding(workspaceId, finding.id, auditId);
+    if (res.success) {
+      await loadFindings();
+    }
 
     setOpenMenu(null);
   }
 
-  function updateFindingStatus(
+  async function updateFindingStatus(
     finding: Finding,
     status: FindingStatus
   ) {
-    setFindings((current) => current.map((item) =>
-        item.id === finding.id
-          ? { ...item, status }
-          : item
-      ));
+    if (!workspaceId || !auditId) return;
+    const res = await updateFinding(
+      workspaceId,
+      finding.id,
+      { status },
+      auditId
+    );
+    if (res.success) {
+      await loadFindings();
+    }
 
     setOpenMenu(null);
   }
@@ -585,7 +435,7 @@ export default function FindingsPage() {
                     <div className="absolute right-0 top-10 z-[60] w-40 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl">
                       {[
                         "All Severities",
-                        ...SEVERITY_OPTIONS,
+                        ...[...SEVERITY_OPTIONS],
                       ].map((severity) => (
                         <button
                           key={severity}
@@ -638,7 +488,7 @@ export default function FindingsPage() {
                     <div className="absolute right-0 top-10 z-[60] w-40 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl">
                       {[
                         "All Statuses",
-                        ...STATUS_OPTIONS,
+                        ...[...STATUS_OPTIONS],
                       ].map((status) => (
                         <button
                           key={status}
@@ -692,6 +542,7 @@ export default function FindingsPage() {
                       <FindingRow
                         key={finding.id}
                         finding={finding}
+                        auditId={auditId}
                         menuOpen={openMenu === finding.id}
                         onMenu={() =>
                           setOpenMenu(
@@ -706,7 +557,7 @@ export default function FindingsPage() {
                         onResolve={() =>
                           updateFindingStatus(
                             finding,
-                            "Resolved"
+                            "Remediated"
                           )
                         }
                         onDelete={() =>
@@ -855,6 +706,7 @@ function TableHeader({
 
 function FindingRow({
   finding,
+  auditId,
   menuOpen,
   onMenu,
   onEdit,
@@ -862,6 +714,7 @@ function FindingRow({
   onDelete,
 }: {
   finding: Finding;
+  auditId: string;
   menuOpen: boolean;
   onMenu: () => void;
   onEdit: () => void;
@@ -882,9 +735,9 @@ function FindingRow({
       ? "bg-red-50 text-red-700"
       : finding.status === "In Progress"
         ? "bg-blue-50 text-blue-700"
-        : finding.status === "Resolved"
+        : finding.status === "Remediated"
           ? "bg-emerald-50 text-emerald-700"
-          : finding.status === "Accepted"
+          : finding.status === "Accepted Risk"
             ? "bg-violet-50 text-violet-700"
             : "bg-slate-100 text-slate-500";
 
@@ -893,14 +746,20 @@ function FindingRow({
       <td className="px-5 py-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded bg-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-600">
+            <Link
+              href={`/audits/${auditId}/findings/${finding.id}`}
+              className="rounded bg-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition"
+            >
               {finding.reference}
-            </span>
+            </Link>
           </div>
 
-          <p className="mt-2 text-[12px] font-medium text-slate-800">
+          <Link
+            href={`/audits/${auditId}/findings/${finding.id}`}
+            className="mt-2 block text-[12px] font-medium text-slate-800 hover:text-blue-600 transition"
+          >
             {finding.title}
-          </p>
+          </Link>
 
           <p className="mt-1 max-w-[310px] truncate text-[10px] text-slate-400">
             {finding.description || "No description provided"}
@@ -975,7 +834,11 @@ function FindingRow({
               Edit Finding
             </button>
 
-            {finding.status !== "Resolved" &&
+            {
+              
+              finding.status !== "Remediated" &&
+
+              
               finding.status !== "Closed" && (
                 <button
                   type="button"
@@ -983,7 +846,7 @@ function FindingRow({
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Mark Resolved
+                  Mark Remediated
                 </button>
               )}
 
@@ -1092,7 +955,7 @@ function FindingModal({
             <SelectField
               label="Severity"
               value={severity}
-              options={SEVERITY_OPTIONS}
+              options={[...SEVERITY_OPTIONS]}
               onChange={(value) =>
                 setSeverity(value as FindingSeverity)
               }
@@ -1149,7 +1012,7 @@ function FindingModal({
             <SelectField
               label="Status"
               value={status}
-              options={STATUS_OPTIONS}
+              options={[...STATUS_OPTIONS]}
               onChange={(value) =>
                 setStatus(value as FindingStatus)
               }

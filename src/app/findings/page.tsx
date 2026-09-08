@@ -1,7 +1,13 @@
 "use client";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useEffect } from "react";
-import { getFindings } from "@/actions/findings";
+import { useEffect, useCallback } from "react";
+import {
+  getFindings,
+  createFinding,
+  updateFinding,
+  deleteFinding as apiDeleteFinding,
+} from "@/actions/findings";
+import { getAudits } from "@/actions/audits";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
@@ -31,12 +37,12 @@ type FindingSeverity =
 type FindingStatus =
   | "Open"
   | "In Progress"
-  | "Resolved"
+  | "Remediated"
   | "Accepted Risk"
   | "Closed";
 
 type Finding = {
-  id: number;
+  id: string | number;
   findingId: string;
   title: string;
   description: string;
@@ -48,6 +54,9 @@ type Finding = {
   auditor: string;
   identified: string;
   dueDate: string;
+  auditId: string;
+  setAuditId: (value: string) => void;
+  audits: { id: string; name: string }[];
   evidence: string;
   recommendation: string;
 };
@@ -62,7 +71,7 @@ const SEVERITY_OPTIONS: FindingSeverity[] = [
 const STATUS_OPTIONS: FindingStatus[] = [
   "Open",
   "In Progress",
-  "Resolved",
+  
   "Accepted Risk",
   "Closed",
 ];
@@ -76,157 +85,89 @@ const FRAMEWORK_OPTIONS = [
   "CIS Controls",
 ];
 
-const INITIAL_FINDINGS: Finding[] = [
-  {
-    id: 1,
-    findingId: "FND-2026-001",
-    title: "Privileged access reviews are not performed quarterly",
-    description:
-      "Quarterly privileged access reviews were not consistently performed for administrative accounts.",
-    severity: "High",
-    status: "Open",
-    framework: "ISO 27001",
-    control: "A.5.18",
-    owner: "Michael Lee",
-    auditor: "John Carter",
-    identified: "Today, 09:15 AM",
-    dueDate: "Sep 15, 2026",
-    evidence: "Access Control Review.xlsx",
-    recommendation:
-      "Implement a documented quarterly privileged-access review process with management sign-off.",
-  },
-  {
-    id: 2,
-    findingId: "FND-2026-002",
-    title: "Security awareness training records incomplete",
-    description:
-      "Training completion records for several employees could not be verified during the audit.",
-    severity: "Medium",
-    status: "In Progress",
-    framework: "NIST CSF",
-    control: "PR.AT-01",
-    owner: "Emily Davis",
-    auditor: "John Carter",
-    identified: "Yesterday, 03:42 PM",
-    dueDate: "Sep 20, 2026",
-    evidence: "Security Awareness Training.pdf",
-    recommendation:
-      "Maintain centralized training records and establish periodic completion monitoring.",
-  },
-  {
-    id: 3,
-    findingId: "FND-2026-003",
-    title: "Vulnerability remediation exceeds defined SLA",
-    description:
-      "Several high-risk vulnerabilities remained unresolved beyond the organization's remediation SLA.",
-    severity: "Critical",
-    status: "Open",
-    framework: "NIST CSF",
-    control: "DE.CM-08",
-    owner: "David Wilson",
-    auditor: "John Carter",
-    identified: "Yesterday, 11:18 AM",
-    dueDate: "Sep 10, 2026",
-    evidence: "Vulnerability Management Report.pdf",
-    recommendation:
-      "Enforce vulnerability remediation SLAs and escalate overdue high-risk vulnerabilities.",
-  },
-  {
-    id: 4,
-    findingId: "FND-2026-004",
-    title: "Risk register requires periodic review",
-    description:
-      "The enterprise risk register did not contain evidence of a recent formal review.",
-    severity: "Medium",
-    status: "Open",
-    framework: "NIST RMF",
-    control: "RM-02",
-    owner: "Alice Smith",
-    auditor: "John Carter",
-    identified: "2 days ago",
-    dueDate: "Sep 25, 2026",
-    evidence: "Risk Assessment Register.xlsx",
-    recommendation:
-      "Establish a recurring risk-register review cadence with documented approvals.",
-  },
-  {
-    id: 5,
-    findingId: "FND-2026-005",
-    title: "Incident response procedure requires update",
-    description:
-      "The incident response procedure does not reflect the organization's current escalation contacts.",
-    severity: "Low",
-    status: "Resolved",
-    framework: "SOC 2",
-    control: "CC7.3",
-    owner: "Sarah Brown",
-    auditor: "John Carter",
-    identified: "3 days ago",
-    dueDate: "Sep 05, 2026",
-    evidence: "Incident Response Procedure.docx",
-    recommendation:
-      "Update escalation contacts and validate the procedure through an annual tabletop exercise.",
-  },
-  {
-    id: 6,
-    findingId: "FND-2026-006",
-    title: "Security policy approval evidence unavailable",
-    description:
-      "Current approval evidence for the information security policy was not available at the time of testing.",
-    severity: "High",
-    status: "Accepted Risk",
-    framework: "ISO 27001",
-    control: "A.5.1",
-    owner: "Alice Smith",
-    auditor: "John Carter",
-    identified: "4 days ago",
-    dueDate: "Oct 01, 2026",
-    evidence: "Information Security Policy.pdf",
-    recommendation:
-      "Maintain documented management approval and version history for security policies.",
-  },
-];
+
 
 export default function FindingsPage() {
   const { currentWorkspace } = useWorkspace();
-  const [findings, setFindings] = useState<any[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [audits, setAudits] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
+
+  const loadData = useCallback(async () => {
     if (currentWorkspace?.id) {
-      getFindings(currentWorkspace.id).then((res: any) => {
-        if (res.success && res.data) setFindings(res.data.map((f: any) => ({ ...f, findingId: f.reference, identified: f.identified_date, dueDate: f.due_date })));
+      setLoading(true);
+      try {
+        const [findingsRes, auditsRes] = await Promise.all([
+          getFindings(currentWorkspace.id),
+          getAudits(currentWorkspace.id),
+        ]);
+
+        if (findingsRes.success && findingsRes.data) {
+          setFindings(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            findingsRes.data.map((f: any) => ({
+              ...f,
+              id: f.id,
+              findingId: f.reference,
+              title: f.title,
+              description: f.description,
+              framework: f.framework,
+              control: f.control,
+              severity: f.severity,
+              owner: f.owner,
+              auditor: f.auditor,
+              identified: f.identified_date,
+              dueDate: f.due_date,
+              status: f.status,
+              evidence: f.evidence,
+              recommendation: f.recommendation,
+              auditId: f.audit_id,
+              auditName: f.audit_name,
+            }))
+          );
+        } else {
+          setFindings([]);
+        }
+
+        if (auditsRes.success && auditsRes.data) {
+          setAudits(
+            (auditsRes.data as { id: string; name: string }[]).map((a) => ({
+              id: a.id,
+              name: a.name,
+            }))
+          );
+        } else {
+          setAudits([]);
+        }
+      } finally {
         setLoading(false);
-      });
+      }
     } else {
       setFindings([]);
+      setAudits([]);
       setLoading(false);
     }
   }, [currentWorkspace?.id]);
-  //
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, [loadData]);
 
   const [search, setSearch] = useState("");
 
-  const [severityFilter, setSeverityFilter] =
-    useState("All Severity");
+  const [severityFilter, setSeverityFilter] = useState<string>("All Severity");
 
-  const [statusFilter, setStatusFilter] =
-    useState("All Status");
+  const [statusFilter, setStatusFilter] = useState<string>("All Status");
 
   const [frameworkFilter, setFrameworkFilter] =
     useState("All Frameworks");
 
-  const [severityOpen, setSeverityOpen] =
-    useState(false);
+  const [severityOpen, setSeverityOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [frameworkOpen, setFrameworkOpen] = useState(false);
 
-  const [statusOpen, setStatusOpen] =
-    useState(false);
-
-  const [frameworkOpen, setFrameworkOpen] =
-    useState(false);
-
-  const [showModal, setShowModal] =
-    useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const [editingFinding, setEditingFinding] =
     useState<Finding | null>(null);
@@ -234,38 +175,23 @@ export default function FindingsPage() {
   const [selectedFinding, setSelectedFinding] =
     useState<Finding | null>(null);
 
-  const [openMenu, setOpenMenu] =
-    useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<number | string | null>(null);
 
-  const [formTitle, setFormTitle] =
-    useState("");
-
-  const [formDescription, setFormDescription] =
-    useState("");
-
+  const [formReference, setFormReference] = useState("");
+  const [formTitle, setFormTitle] = useState("");
+  const [formDescription, setFormDescription] = useState("");
   const [formSeverity, setFormSeverity] =
     useState<FindingSeverity>("Medium");
-
   const [formStatus, setFormStatus] =
     useState<FindingStatus>("Open");
-
-  const [formFramework, setFormFramework] =
-    useState("ISO 27001");
-
-  const [formControl, setFormControl] =
-    useState("");
-
-  const [formOwner, setFormOwner] =
-    useState("Alice Smith");
-
-  const [formDueDate, setFormDueDate] =
-    useState("");
-
-  const [formEvidence, setFormEvidence] =
-    useState("");
-
-  const [formRecommendation, setFormRecommendation] =
-    useState("");
+  const [formFramework, setFormFramework] = useState("ISO 27001");
+  const [formControl, setFormControl] = useState("");
+  const [formOwner, setFormOwner] = useState("");
+  const [formIdentifiedDate, setFormIdentifiedDate] = useState("");
+  const [formDueDate, setFormDueDate] = useState("");
+  const [formEvidence, setFormEvidence] = useState("");
+  const [formRecommendation, setFormRecommendation] = useState("");
+  const [formAuditId, setFormAuditId] = useState("");
 
   const filteredFindings = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -324,21 +250,24 @@ export default function FindingsPage() {
 
   const resolvedFindings = findings.filter(
     (item) =>
-      item.status === "Resolved" ||
+      item.status === "Remediated" ||
       item.status === "Closed"
   ).length;
 
   function resetForm() {
+    setFormReference("");
     setFormTitle("");
     setFormDescription("");
     setFormSeverity("Medium");
     setFormStatus("Open");
     setFormFramework("ISO 27001");
     setFormControl("");
-    setFormOwner("Alice Smith");
+    setFormOwner("");
+    setFormIdentifiedDate("");
     setFormDueDate("");
     setFormEvidence("");
     setFormRecommendation("");
+    setFormAuditId("");
   }
 
   function openAddFinding() {
@@ -350,6 +279,7 @@ export default function FindingsPage() {
   function openEditFinding(item: Finding) {
     setEditingFinding(item);
 
+    setFormReference(item.findingId || "");
     setFormTitle(item.title);
     setFormDescription(item.description);
     setFormSeverity(item.severity);
@@ -357,112 +287,117 @@ export default function FindingsPage() {
     setFormFramework(item.framework);
     setFormControl(item.control);
     setFormOwner(item.owner);
-    setFormDueDate(item.dueDate);
-    setFormEvidence(item.evidence);
-    setFormRecommendation(item.recommendation);
+    setFormIdentifiedDate(item.identified || "");
+    setFormDueDate(item.dueDate || "");
+    setFormEvidence(item.evidence || "");
+    setFormRecommendation(item.recommendation || "");
+    setFormAuditId(item.auditId?.toString() || "");
 
     setOpenMenu(null);
     setShowModal(true);
   }
 
-  function saveFinding() {
+  async function saveFinding() {
     if (
       !formTitle.trim() ||
       !formDescription.trim() ||
-      !formControl.trim()
+      !formControl.trim() ||
+      !currentWorkspace?.id ||
+      !formAuditId
     ) {
       return;
     }
 
     if (editingFinding) {
-      setFindings((current) =>
-        current.map((item) =>
-          item.id === editingFinding.id
-            ? {
-                ...item,
-                title: formTitle.trim(),
-                description: formDescription.trim(),
-                severity: formSeverity,
-                status: formStatus,
-                framework: formFramework,
-                control: formControl.trim(),
-                owner: formOwner,
-                dueDate:
-                  formDueDate.trim() || "Not assigned",
-                evidence:
-                  formEvidence.trim() || "No evidence linked",
-                recommendation:
-                  formRecommendation.trim() ||
-                  "No recommendation provided.",
-              }
-            : item
-        )
+      const res = await updateFinding(
+        currentWorkspace.id,
+        editingFinding.id.toString(),
+        {
+          reference: formReference.trim() || undefined,
+          title: formTitle.trim(),
+          description: formDescription.trim(),
+          framework: formFramework,
+          control: formControl.trim(),
+          severity: formSeverity,
+          owner: formOwner.trim() || "Unassigned",
+          identifiedDate: formIdentifiedDate || undefined,
+          dueDate: formDueDate.trim() || undefined,
+          status: formStatus,
+          evidence: formEvidence.trim() || undefined,
+          recommendation: formRecommendation.trim() || undefined,
+        },
+        formAuditId
       );
+      if (res.success) {
+        await loadData();
+      }
     } else {
-      const newFinding: Finding = {
-        id: Date.now(),
-        findingId: `FND-2026-${String(
-          findings.length + 1
-        ).padStart(3, "0")}`,
+      const res = await createFinding(currentWorkspace.id, {
+        auditId: formAuditId,
+        reference: formReference.trim() || undefined,
         title: formTitle.trim(),
         description: formDescription.trim(),
-        severity: formSeverity,
-        status: formStatus,
         framework: formFramework,
         control: formControl.trim(),
-        owner: formOwner,
-        auditor: "John Carter",
-        identified: "Just now",
-        dueDate:
-          formDueDate.trim() || "Not assigned",
-        evidence:
-          formEvidence.trim() || "No evidence linked",
-        recommendation:
-          formRecommendation.trim() ||
-          "No recommendation provided.",
-      };
-
-      setFindings((current) => [
-        newFinding,
-        ...current,
-      ]);
+        severity: formSeverity,
+        owner: formOwner.trim() || "Unassigned",
+        identifiedDate: formIdentifiedDate || undefined,
+        dueDate: formDueDate.trim() || undefined,
+        status: formStatus,
+        evidence: formEvidence.trim() || undefined,
+        recommendation: formRecommendation.trim() || undefined,
+      });
+      if (res.success) {
+        await loadData();
+      }
     }
 
     setShowModal(false);
   }
 
-  function deleteFinding(item: Finding) {
-    setFindings((current) =>
-      current.filter(
-        (entry) => entry.id !== item.id
-      )
+  async function deleteFinding(item: Finding) {
+    if (!currentWorkspace?.id || !item.auditId?.toString()) return;
+
+    const confirmed = window.confirm(
+      `Delete finding "${item.title}"?`
     );
+    if (!confirmed) return;
+
+    const res = await apiDeleteFinding(
+      currentWorkspace.id,
+      item.id.toString().toString(),
+      item.auditId?.toString()
+    );
+
+    if (res.success) {
+      await loadData();
+    }
 
     setOpenMenu(null);
 
-    if (selectedFinding?.id === item.id) {
+    if (selectedFinding?.id === item.id.toString().toString()) {
       setSelectedFinding(null);
     }
   }
 
-  function changeStatus(
+  async function changeStatus(
     item: Finding,
     status: FindingStatus
   ) {
-    setFindings((current) =>
-      current.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              status,
-            }
-          : entry
-      )
+    if (!currentWorkspace?.id || !item.auditId?.toString()) return;
+    const res = await updateFinding(
+      currentWorkspace.id,
+      item.id.toString().toString(),
+      { status },
+      item.auditId?.toString()
     );
+    if (res.success) {
+      await loadData();
+    }
 
     setOpenMenu(null);
 
-    if (selectedFinding?.id === item.id) {
+    if (selectedFinding?.id === item.id.toString().toString()) {
       setSelectedFinding({
         ...item,
         status,
@@ -470,20 +405,20 @@ export default function FindingsPage() {
     }
   }
 
-  function changeSeverity(
+  async function changeSeverity(
     item: Finding,
     severity: FindingSeverity
   ) {
-    setFindings((current) =>
-      current.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              severity,
-            }
-          : entry
-      )
+    if (!currentWorkspace?.id || !item.auditId?.toString()) return;
+    const res = await updateFinding(
+      currentWorkspace.id,
+      item.id.toString().toString(),
+      { severity },
+      item.auditId?.toString()
     );
+    if (res.success) {
+      await loadData();
+    }
 
     setOpenMenu(null);
   }
@@ -560,7 +495,7 @@ export default function FindingsPage() {
               icon={
                 <CheckCircle2 className="h-4 w-4" />
               }
-              label="Resolved"
+              label="Remediated"
               value={String(resolvedFindings)}
               valueClass="text-emerald-600"
             />
@@ -691,16 +626,16 @@ export default function FindingsPage() {
                   {filteredFindings.length > 0 ? (
                     filteredFindings.map((item) => (
                       <FindingRow
-                        key={item.id}
+                        key={item.id.toString().toString()}
                         item={item}
                         menuOpen={
-                          openMenu === item.id
+                          openMenu === item.id.toString().toString().toString()
                         }
                         onMenu={() =>
                           setOpenMenu(
-                            openMenu === item.id
+                            openMenu === item.id.toString().toString().toString()
                               ? null
-                              : item.id
+                              : item.id.toString().toString()
                           )
                         }
                         onView={() => {
@@ -719,7 +654,7 @@ export default function FindingsPage() {
                         onResolve={() =>
                           changeStatus(
                             item,
-                            "Resolved"
+                            "Remediated"
                           )
                         }
                         onCloseFinding={() =>
@@ -846,6 +781,9 @@ export default function FindingsPage() {
       {showModal && (
         <FindingModal
           editing={Boolean(editingFinding)}
+          audits={audits}
+          auditId={formAuditId}
+          setAuditId={setFormAuditId}
           title={formTitle}
           description={formDescription}
           severity={formSeverity}
@@ -1043,7 +981,7 @@ function FindingRow({
           : "bg-slate-100 text-slate-600";
 
   const statusClass =
-    item.status === "Resolved" ||
+    item.status === "Remediated" ||
     item.status === "Closed"
       ? "bg-emerald-50 text-emerald-700"
       : item.status === "In Progress"
@@ -1190,7 +1128,7 @@ function FindingRow({
 
             <div className="my-1 border-t border-slate-100" />
 
-            {item.status !== "Resolved" && (
+            {item.status !== "Remediated" && (
               <button
                 type="button"
                 onClick={onResolve}
@@ -1284,6 +1222,9 @@ function FindingModal({
   control,
   owner,
   dueDate,
+  auditId,
+  setAuditId,
+  audits,
   evidence,
   recommendation,
   setTitle,
@@ -1308,6 +1249,9 @@ function FindingModal({
   control: string;
   owner: string;
   dueDate: string;
+  auditId: string;
+  setAuditId: (value: string) => void;
+  audits: { id: string; name: string }[];
   evidence: string;
   recommendation: string;
   setTitle: (value: string) => void;
@@ -1354,6 +1298,15 @@ function FindingModal({
 
         <div className="space-y-4 px-6 py-5">
 
+
+          <div className="mb-4">
+            <SelectField
+              label="Associated Audit"
+              value={auditId}
+              options={audits.map((a: { id: string; name: string }) => a.id)}
+              onChange={setAuditId}
+            />
+          </div>
           <FormField
             label="Finding Title"
             value={title}
@@ -1373,7 +1326,7 @@ function FindingModal({
             <SelectField
               label="Severity"
               value={severity}
-              options={SEVERITY_OPTIONS}
+              options={[...SEVERITY_OPTIONS]}
               onChange={(value) =>
                 setSeverity(
                   value as FindingSeverity
@@ -1384,7 +1337,7 @@ function FindingModal({
             <SelectField
               label="Status"
               value={status}
-              options={STATUS_OPTIONS}
+              options={[...STATUS_OPTIONS]}
               onChange={(value) =>
                 setStatus(
                   value as FindingStatus
@@ -1637,7 +1590,7 @@ function FindingDetails({
           : "bg-slate-100 text-slate-600";
 
   const statusClass =
-    item.status === "Resolved" ||
+    item.status === "Remediated" ||
     item.status === "Closed"
       ? "bg-emerald-50 text-emerald-700"
       : item.status === "In Progress"
