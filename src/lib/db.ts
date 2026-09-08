@@ -160,4 +160,13 @@ if (!findingColumns.includes("auditor")) {
   db.exec("ALTER TABLE findings ADD COLUMN auditor TEXT DEFAULT ''");
 }
 
+// Safe migrations for risks columns
+const riskColumns = (db.pragma("table_info(risks)") as { name: string }[]).map((c) => c.name);
+if (!riskColumns.includes("asset")) {
+  db.exec("ALTER TABLE risks ADD COLUMN asset TEXT DEFAULT ''");
+}
+if (!riskColumns.includes("identified_date")) {
+  db.exec("ALTER TABLE risks ADD COLUMN identified_date TEXT DEFAULT ''");
+}
+
 export default db;

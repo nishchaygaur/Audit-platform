@@ -49,6 +49,11 @@ import {
   createFinding,
   updateFinding,
 } from "@/actions/findings";
+import {
+  getRisks,
+  createRisk,
+  type RiskRecord,
+} from "@/actions/risks";
 
 /* ============================================================
    FALLBACK AUDIT DATA
@@ -2374,6 +2379,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
 ============================================================ */
 
 function RisksPanel({ audit }: { audit: Audit }) {
+  const { currentWorkspace } = useWorkspace();
   const [risksList, setRisksList] = useState<RiskItem[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedRisk, setSelectedRisk] = useState<RiskItem | null>(null);
@@ -2387,38 +2393,40 @@ function RisksPanel({ audit }: { audit: Audit }) {
   const [formOwner, setFormOwner] = useState(audit.lead || "Alice Smith");
   const [formTreatment, setFormTreatment] = useState("Mitigate");
 
-  useEffect(() => {
-    const all = getStoredRisks();
-    const filtered = all.filter((r) => r.auditId === audit.id);
-    if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRisksList(filtered);
+  const loadRisks = async () => {
+    if (!currentWorkspace?.id || !audit.id) return;
+    const res = await getRisks(currentWorkspace.id, audit.id);
+    if (res.success && res.data && res.data.length > 0) {
+      const mapped: RiskItem[] = res.data.map((r: RiskRecord) => ({
+        id: r.id,
+        workspaceId: r.workspace_id,
+        auditId: r.audit_id,
+        title: r.title,
+        description: r.description,
+        category: r.category,
+        framework: r.framework,
+        asset: r.asset || "Core Systems",
+        owner: r.owner,
+        likelihood: typeof r.likelihood === "string" ? parseInt(r.likelihood, 10) || 3 : 3,
+        impact: typeof r.impact === "string" ? parseInt(r.impact, 10) || 3 : 3,
+        score: r.score,
+        level: r.level as RiskItem["level"],
+        status: (r.status === "Closed" ? "Closed" : r.status === "Mitigated" ? "Mitigated" : "Open") as RiskItem["status"],
+        identifiedDate: r.identified_date || "Today",
+        dueDate: r.due_date,
+        treatment: r.treatment,
+      }));
+      setRisksList(mapped);
     } else {
-      const defaults: RiskItem[] = [
-        {
-          id: `RSK-${audit.id.replace("AUD-", "")}-001`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          title: `Operational risk related to ${audit.framework} control deficiencies`,
-          description: "Unmitigated compliance gap may impact certification status.",
-          category: "Compliance",
-          framework: audit.framework,
-          asset: "Information Security Management",
-          owner: audit.lead,
-          likelihood: 4,
-          impact: 4,
-          score: 16,
-          level: "High",
-          status: "Open",
-          identifiedDate: "05 May 2024",
-          dueDate: "30 Jun 2024",
-          treatment: "Mitigate",
-        },
-      ];
-      setRisksList(defaults);
-      saveStoredRisks([...all, ...defaults]);
+      const all = getStoredRisks();
+      const filtered = all.filter((r) => r.auditId === audit.id);
+      setRisksList(filtered);
     }
-  }, [audit.id, audit.framework, audit.lead]);
+  };
+
+  useEffect(() => {
+    loadRisks();
+  }, [currentWorkspace?.id, audit.id]);
 
   const highOrCritCount = risksList.filter(
     (r) => r.level === "Critical" || r.level === "High"
@@ -2426,9 +2434,53 @@ function RisksPanel({ audit }: { audit: Audit }) {
   const mediumCount = risksList.filter((r) => r.level === "Medium").length;
   const lowCount = risksList.filter((r) => r.level === "Low").length;
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
+
+    if (currentWorkspace?.id) {
+      const score = formLevel === "Critical" ? 25 : formLevel === "High" ? 16 : 9;
+      const res = await createRisk(currentWorkspace.id, {
+        auditId: audit.id,
+        title: formTitle.trim(),
+        description: formDesc || "Identified during security assessment.",
+        category: formCategory,
+        framework: audit.framework,
+        asset: formAsset,
+        owner: formOwner,
+        score,
+        level: formLevel,
+        treatment: formTreatment,
+        status: "Open",
+      });
+
+      if (res.success && res.data) {
+        const newItem: RiskItem = {
+          id: res.data.id,
+          workspaceId: currentWorkspace.id,
+          auditId: audit.id,
+          title: res.data.title,
+          description: res.data.description,
+          category: res.data.category,
+          framework: res.data.framework,
+          asset: res.data.asset || formAsset,
+          owner: res.data.owner,
+          likelihood: 4,
+          impact: 4,
+          score: res.data.score,
+          level: res.data.level as RiskItem["level"],
+          status: "Open",
+          identifiedDate: "Today",
+          dueDate: res.data.due_date,
+          treatment: res.data.treatment,
+        };
+        setRisksList([newItem, ...risksList]);
+        setShowCreateModal(false);
+        setFormTitle("");
+        setFormDesc("");
+        return;
+      }
+    }
 
     const all = getStoredRisks();
     const nextNum = all.length + 1;
@@ -2436,7 +2488,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
 
     const newRisk: RiskItem = {
       id: newId,
-      workspaceId: "abc-technologies",
+      workspaceId: currentWorkspace?.id || "abc-technologies",
       auditId: audit.id,
       title: formTitle.trim(),
       description: formDesc || "Identified during security assessment.",

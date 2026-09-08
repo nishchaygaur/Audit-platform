@@ -1,26 +1,33 @@
 "use client";
+
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getRisks } from "@/actions/risks";
+import {
+  getRisks,
+  createRisk,
+  updateRisk,
+  deleteRisk,
+  type RiskRecord,
+} from "@/actions/risks";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
-  Filter,
   MoreHorizontal,
   Plus,
   Search,
   ShieldAlert,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
 
 type RiskLevel = "Critical" | "High" | "Medium" | "Low";
-type RiskStatus = "Open" | "In Treatment" | "Accepted" | "Closed";
+type RiskStatus = "Open" | "In Treatment" | "Mitigated" | "Accepted" | "Closed";
 type Treatment = "Mitigate" | "Accept" | "Transfer" | "Avoid";
 type Rating = "Rare" | "Unlikely" | "Possible" | "Likely" | "Almost Certain";
 
@@ -42,110 +49,9 @@ type Risk = {
   residualScore: number;
   residualLevel: RiskLevel;
   status: RiskStatus;
+  asset?: string;
+  identifiedDate?: string;
 };
-
-const INITIAL_RISKS: Risk[] = [
-  {
-    id: "RSK-001",
-    title: "Unauthorized privileged access",
-    description:
-      "Excessive or unauthorized privileged access could allow inappropriate changes to critical systems.",
-    category: "Access Control",
-    finding: "FND-001",
-    framework: "ISO 27001",
-    control: "A.5.15",
-    likelihood: "Likely",
-    impact: "Almost Certain",
-    score: 20,
-    level: "Critical",
-    treatment: "Mitigate",
-    owner: "John Carter",
-    dueDate: "30 Jun 2024",
-    residualScore: 8,
-    residualLevel: "Medium",
-    status: "Open",
-  },
-  {
-    id: "RSK-002",
-    title: "Loss of sensitive customer information",
-    description:
-      "Inadequate protection of sensitive information may result in disclosure or unauthorized access.",
-    category: "Data Protection",
-    finding: "FND-002",
-    framework: "ISO 27001",
-    control: "A.5.34",
-    likelihood: "Possible",
-    impact: "Almost Certain",
-    score: 15,
-    level: "High",
-    treatment: "Mitigate",
-    owner: "Emily Davis",
-    dueDate: "05 Jul 2024",
-    residualScore: 6,
-    residualLevel: "Medium",
-    status: "In Treatment",
-  },
-  {
-    id: "RSK-003",
-    title: "Cloud service security misconfiguration",
-    description:
-      "Incorrect cloud configuration could expose services or sensitive organizational information.",
-    category: "Cloud Security",
-    finding: "FND-003",
-    framework: "NIST CSF",
-    control: "PR.AC-03",
-    likelihood: "Possible",
-    impact: "Likely",
-    score: 12,
-    level: "High",
-    treatment: "Mitigate",
-    owner: "Michael Lee",
-    dueDate: "12 Jul 2024",
-    residualScore: 6,
-    residualLevel: "Medium",
-    status: "In Treatment",
-  },
-  {
-    id: "RSK-004",
-    title: "Insufficient security awareness",
-    description:
-      "Insufficient employee security awareness may increase the likelihood of humanrror incidents.",
-    category: "Human Resources",
-    finding: "FND-004",
-    framework: "ISO 27001",
-    control: "A.6.3",
-    likelihood: "Unlikely",
-    impact: "Likely",
-    score: 8,
-    level: "Medium",
-    treatment: "Mitigate",
-    owner: "Alice Smith",
-    dueDate: "20 Jul 2024",
-    residualScore: 4,
-    residualLevel: "Medium",
-    status: "Open",
-  },
-  {
-    id: "RSK-005",
-    title: "Third-party service disruption",
-    description:
-      "A disruption at a critical supplier could affect the availability of business services.",
-    category: "Third Party",
-    finding: "FND-005",
-    framework: "NIST CSF",
-    control: "ID.SC-02",
-    likelihood: "Unlikely",
-    impact: "Possible",
-    score: 6,
-    level: "Medium",
-    treatment: "Accept",
-    owner: "David Wilson",
-    dueDate: "25 Jul 2024",
-    residualScore: 3,
-    residualLevel: "Low",
-    status: "Accepted",
-  },
-];
 
 const OWNERS = [
   "Alice Smith",
@@ -162,6 +68,9 @@ const CATEGORIES = [
   "Human Resources",
   "Third Party",
   "Business Continuity",
+  "Identity Management",
+  "Logging & Monitoring",
+  "Governance",
 ];
 
 const RATINGS: Rating[] = [
@@ -181,7 +90,7 @@ function ratingValue(rating: Rating) {
     "Almost Certain": 5,
   };
 
-  return values[rating];
+  return values[rating] || 3;
 }
 
 function calculateScore(likelihood: Rating, impact: Rating) {
@@ -197,27 +106,62 @@ function calculateLevel(score: number): RiskLevel {
 
 export default function RisksPage() {
   const params = useParams<{ id: string }>();
-  const auditId = params.id;
+  const auditId = params?.id as string;
 
-  const [risks, setRisks] = useState<any[]>([]);
+  const [risks, setRisks] = useState<Risk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { currentWorkspace } = useWorkspace();
-  
-  useEffect(() => {
-    if (currentWorkspace?.id && params.id) {
-      getRisks(currentWorkspace.id, params.id as string).then((res: any) => {
-        if (res.success && res.data) {
-          setRisks(res.data.map((r: any) => ({...r, dueDate: r.due_date, residualScore: r.residual_score, residualLevel: r.residual_level})));
-        }
-        setLoading(false);
-      });
-    } else {
+
+  const loadRisks = useCallback(async () => {
+    if (!currentWorkspace?.id || !auditId) {
       setRisks([]);
       setLoading(false);
+      return;
     }
-  }, [currentWorkspace?.id, params.id]);
-  const [search, setSearch] = useState("");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getRisks(currentWorkspace.id, auditId);
+      if (res.success && res.data) {
+        const mapped: Risk[] = res.data.map((r: RiskRecord) => ({
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          category: r.category,
+          finding: r.finding,
+          framework: r.framework,
+          control: r.control,
+          likelihood: (r.likelihood as Rating) || "Possible",
+          impact: (r.impact as Rating) || "Possible",
+          score: r.score,
+          level: r.level,
+          treatment: (r.treatment as Treatment) || "Mitigate",
+          owner: r.owner,
+          dueDate: r.due_date,
+          residualScore: r.residual_score,
+          residualLevel: r.residual_level,
+          status: r.status,
+          asset: r.asset,
+          identifiedDate: r.identified_date,
+        }));
+        setRisks(mapped);
+      } else {
+        setError(res.error || "Failed to load risks");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to fetch risks");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentWorkspace?.id, auditId]);
 
+  useEffect(() => {
+    loadRisks();
+  }, [loadRisks]);
+
+  const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState<RiskLevel | "All">("All");
   const [statusFilter, setStatusFilter] = useState<RiskStatus | "All">("All");
 
@@ -236,9 +180,9 @@ export default function RisksPage() {
     treatment: "Mitigate" as Treatment,
     owner: OWNERS[0],
     dueDate: "",
+    asset: "Core Infrastructure",
   });
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading risks...</div>;
   const filteredRisks = useMemo(() => {
     const query = search.toLowerCase().trim();
 
@@ -248,8 +192,9 @@ export default function RisksPage() {
         risk.id.toLowerCase().includes(query) ||
         risk.title.toLowerCase().includes(query) ||
         risk.category.toLowerCase().includes(query) ||
-        risk.finding.toLowerCase().includes(query) ||
-        risk.owner.toLowerCase().includes(query);
+        (risk.finding && risk.finding.toLowerCase().includes(query)) ||
+        risk.owner.toLowerCase().includes(query) ||
+        risk.framework.toLowerCase().includes(query);
 
       const matchesLevel =
         levelFilter === "All" || risk.level === levelFilter;
@@ -266,22 +211,19 @@ export default function RisksPage() {
   const medium = risks.filter((risk) => risk.level === "Medium").length;
   const low = risks.filter((risk) => risk.level === "Low").length;
 
-  function addRisk() {
-    if (!newRisk.title.trim()) return;
+  async function handleAddRisk() {
+    if (!newRisk.title.trim() || !currentWorkspace?.id || !auditId) return;
 
-    const score = calculateScore(
-      newRisk.likelihood,
-      newRisk.impact,
-    );
-
+    setIsSubmitting(true);
+    const score = calculateScore(newRisk.likelihood, newRisk.impact);
     const level = calculateLevel(score);
 
-    const risk: Risk = {
-      id: `RSK-${String(risks.length + 1).padStart(3, "0")}`,
+    const res = await createRisk(currentWorkspace.id, {
+      auditId,
       title: newRisk.title.trim(),
       description:
         newRisk.description.trim() ||
-        "Risk identified during the audit assessment.",
+        "Risk identified during audit assessment.",
       category: newRisk.category,
       finding: newRisk.finding,
       framework: newRisk.framework,
@@ -292,66 +234,92 @@ export default function RisksPage() {
       level,
       treatment: newRisk.treatment,
       owner: newRisk.owner,
-      dueDate: newRisk.dueDate
-        ? new Date(`${newRisk.dueDate}T00:00:00`).toLocaleDateString(
-            "en-GB",
-            {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            },
-          )
-        : "Not set",
-      residualScore: score,
-      residualLevel: level,
+      dueDate:
+        newRisk.dueDate ||
+        new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
       status: "Open",
-    };
-
-    setRisks((current) => [...current, risk]);
-    setShowAddModal(false);
-
-    setNewRisk({
-      title: "",
-      description: "",
-      category: "Access Control",
-      finding: "FND-001",
-      framework: "ISO 27001",
-      control: "A.5.15",
-      likelihood: "Possible",
-      impact: "Possible",
-      treatment: "Mitigate",
-      owner: OWNERS[0],
-      dueDate: "",
+      asset: newRisk.asset,
     });
+
+    setIsSubmitting(false);
+
+    if (res.success && res.data) {
+      const created: Risk = {
+        id: res.data.id,
+        title: res.data.title,
+        description: res.data.description,
+        category: res.data.category,
+        finding: res.data.finding,
+        framework: res.data.framework,
+        control: res.data.control,
+        likelihood: (res.data.likelihood as Rating) || newRisk.likelihood,
+        impact: (res.data.impact as Rating) || newRisk.impact,
+        score: res.data.score,
+        level: res.data.level,
+        treatment: (res.data.treatment as Treatment) || (newRisk.treatment as Treatment),
+        owner: res.data.owner,
+        dueDate: res.data.due_date,
+        residualScore: res.data.residual_score,
+        residualLevel: res.data.residual_level,
+        status: res.data.status,
+        asset: res.data.asset,
+        identifiedDate: res.data.identified_date,
+      };
+      setRisks((current) => [created, ...current]);
+      setShowAddModal(false);
+
+      setNewRisk({
+        title: "",
+        description: "",
+        category: "Access Control",
+        finding: "FND-001",
+        framework: "ISO 27001",
+        control: "A.5.15",
+        likelihood: "Possible",
+        impact: "Possible",
+        treatment: "Mitigate",
+        owner: OWNERS[0],
+        dueDate: "",
+        asset: "Core Infrastructure",
+      });
+    } else {
+      alert(res.error || "Failed to create risk");
+    }
   }
 
-  function updateRiskStatus(id: string, status: RiskStatus) {
-    setRisks((current) =>
-      current.map((risk) =>
-        risk.id === id
-          ? {
-              ...risk,
-              status,
-              residualScore:
-                status === "Closed"
-                  ? 0
-                  : status === "Accepted"
-                    ? Math.max(1, Math.round(risk.score * 0.35))
-                    : risk.residualScore,
-              residualLevel:
-                status === "Closed"
-                  ? "Low"
-                  : status === "Accepted"
-                    ? calculateLevel(
-                        Math.max(1, Math.round(risk.score * 0.35)),
-                      )
-                    : risk.residualLevel,
-            }
-          : risk,
-      ),
-    );
-
+  async function updateRiskStatus(id: string, status: RiskStatus) {
+    if (!currentWorkspace?.id) return;
+    const res = await updateRisk(currentWorkspace.id, id, { status });
+    if (res.success && res.data) {
+      setRisks((current) =>
+        current.map((risk) =>
+          risk.id === id
+            ? {
+                ...risk,
+                status: res.data.status,
+                residualScore: res.data.residual_score,
+                residualLevel: res.data.residual_level,
+              }
+            : risk
+        )
+      );
+    } else {
+      alert(res.error || "Failed to update risk status");
+    }
     setSelectedRisk(null);
+  }
+
+  async function handleDeleteRisk(id: string) {
+    if (!currentWorkspace?.id) return;
+    if (!confirm("Are you sure you want to delete this risk?")) return;
+
+    const res = await deleteRisk(currentWorkspace.id, id);
+    if (res.success) {
+      setRisks((current) => current.filter((risk) => risk.id !== id));
+      setSelectedRisk(null);
+    } else {
+      alert(res.error || "Failed to delete risk");
+    }
   }
 
   return (
@@ -365,6 +333,12 @@ export default function RisksPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to Audit
           </Link>
+
+          {error && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              {error}
+            </div>
+          )}
 
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
             {/* HEADER */}
@@ -445,54 +419,30 @@ export default function RisksPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  <Filter className="h-3.5 w-3.5" />
-                  Filters
-                </button>
-
                 <FilterSelect
+                  label="Level"
                   value={levelFilter}
-                  options={[
-                    "All",
-                    "Critical",
-                    "High",
-                    "Medium",
-                    "Low",
-                  ]}
-                  label="Risk level"
-                  onChange={(value) =>
-                    setLevelFilter(value as RiskLevel | "All")
-                  }
+                  options={["All", "Critical", "High", "Medium", "Low"]}
+                  onChange={(val) => setLevelFilter(val as RiskLevel | "All")}
                 />
 
                 <FilterSelect
-                  value={statusFilter}
-                  options={[
-                    "All",
-                    "Open",
-                    "In Treatment",
-                    "Accepted",
-                    "Closed",
-                  ]}
                   label="Status"
-                  onChange={(value) =>
-                    setStatusFilter(value as RiskStatus | "All")
-                  }
+                  value={statusFilter}
+                  options={["All", "Open", "In Treatment", "Mitigated", "Accepted", "Closed"]}
+                  onChange={(val) => setStatusFilter(val as RiskStatus | "All")}
                 />
               </div>
             </div>
 
             {/* TABLE */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1250px] border-collapse">
+              <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/60 text-left">
+                  <tr className="border-b border-slate-100 bg-slate-50/50">
                     <TableHeader first>Risk</TableHeader>
                     <TableHeader>Finding</TableHeader>
-                    <TableHeader>Framework / Control</TableHeader>
+                    <TableHeader>Framework & Control</TableHeader>
                     <TableHeader>Likelihood</TableHeader>
                     <TableHeader>Impact</TableHeader>
                     <TableHeader>Score</TableHeader>
@@ -506,7 +456,13 @@ export default function RisksPage() {
                 </thead>
 
                 <tbody>
-                  {filteredRisks.map((risk) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={12} className="px-6 py-12 text-center text-xs text-slate-400">
+                        Loading risks...
+                      </td>
+                    </tr>
+                  ) : filteredRisks.map((risk) => (
                     <RiskRow
                       key={risk.id}
                       risk={risk}
@@ -516,7 +472,7 @@ export default function RisksPage() {
                 </tbody>
               </table>
 
-              {filteredRisks.length === 0 && (
+              {!loading && filteredRisks.length === 0 && (
                 <div className="px-6 py-14 text-center">
                   <ShieldAlert className="mx-auto h-7 w-7 text-slate-300" />
 
@@ -588,7 +544,7 @@ export default function RisksPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 px-6 py-5">
+            <div className="grid grid-cols-2 gap-4 px-6 py-5 max-h-[80vh] overflow-y-auto">
               <Field label="Risk Title" className="col-span-2">
                 <input
                   value={newRisk.title}
@@ -635,7 +591,7 @@ export default function RisksPage() {
                 </select>
               </Field>
 
-              <Field label="Finding">
+              <Field label="Associated Finding">
                 <input
                   value={newRisk.finding}
                   onChange={(event) =>
@@ -644,6 +600,7 @@ export default function RisksPage() {
                       finding: event.target.value,
                     })
                   }
+                  placeholder="e.g. FND-001"
                   className={inputClass}
                 />
               </Field>
@@ -661,6 +618,7 @@ export default function RisksPage() {
                 >
                   <option>ISO 27001</option>
                   <option>NIST CSF</option>
+                  <option>NIST 800-53</option>
                   <option>NIST RMF</option>
                   <option>SOC 2</option>
                   <option>CIS Controls</option>
@@ -763,9 +721,23 @@ export default function RisksPage() {
                   className={inputClass}
                 />
               </Field>
+
+              <Field label="Affected Asset">
+                <input
+                  value={newRisk.asset}
+                  onChange={(event) =>
+                    setNewRisk({
+                      ...newRisk,
+                      asset: event.target.value,
+                    })
+                  }
+                  placeholder="e.g. Core Infrastructure"
+                  className={inputClass}
+                />
+              </Field>
             </div>
 
-            <div className="flex justifynd gap-2 border-t border-slate-100 px-6 py-4">
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
@@ -776,11 +748,11 @@ export default function RisksPage() {
 
               <button
                 type="button"
-                disabled={!newRisk.title.trim()}
-                onClick={addRisk}
+                disabled={!newRisk.title.trim() || isSubmitting}
+                onClick={handleAddRisk}
                 className="h-9 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Create Risk
+                {isSubmitting ? "Creating..." : "Create Risk"}
               </button>
             </div>
           </div>
@@ -793,6 +765,7 @@ export default function RisksPage() {
           risk={selectedRisk}
           onClose={() => setSelectedRisk(null)}
           onStatusChange={updateRiskStatus}
+          onDelete={() => handleDeleteRisk(selectedRisk.id)}
         />
       )}
     </div>
@@ -866,9 +839,11 @@ function RiskRow({
       ? "bg-emerald-50 text-emerald-700"
       : risk.status === "Accepted"
         ? "bg-slate-100 text-slate-600"
-        : risk.status === "In Treatment"
-          ? "bg-blue-50 text-blue-700"
-          : "bg-orange-50 text-orange-700";
+        : risk.status === "Mitigated"
+          ? "bg-emerald-50 text-emerald-600"
+          : risk.status === "In Treatment"
+            ? "bg-blue-50 text-blue-700"
+            : "bg-orange-50 text-orange-700";
 
   return (
     <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
@@ -899,9 +874,13 @@ function RiskRow({
       </td>
 
       <td className="px-3 py-4">
-        <span className="rounded bg-orange-50 px-2 py-1 text-[10px] font-medium text-orange-700">
-          {risk.finding}
-        </span>
+        {risk.finding ? (
+          <span className="rounded bg-orange-50 px-2 py-1 text-[10px] font-medium text-orange-700">
+            {risk.finding}
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-400">-</span>
+        )}
       </td>
 
       <td className="px-3 py-4">
@@ -983,10 +962,12 @@ function RiskDetailModal({
   risk,
   onClose,
   onStatusChange,
+  onDelete,
 }: {
   risk: Risk;
   onClose: () => void;
   onStatusChange: (id: string, status: RiskStatus) => void;
+  onDelete: () => void;
 }) {
   const levelClass =
     risk.level === "Critical"
@@ -1026,7 +1007,7 @@ function RiskDetailModal({
           </button>
         </div>
 
-        <div className="space-y-5 px-6 py-5">
+        <div className="space-y-5 px-6 py-5 max-h-[75vh] overflow-y-auto">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               Risk Description
@@ -1060,7 +1041,7 @@ function RiskDetailModal({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Detail label="Finding">{risk.finding}</Detail>
+            <Detail label="Finding">{risk.finding || "None"}</Detail>
             <Detail label="Category">{risk.category}</Detail>
             <Detail label="Framework">{risk.framework}</Detail>
             <Detail label="Control">{risk.control}</Detail>
@@ -1072,11 +1053,12 @@ function RiskDetailModal({
             <Detail label="Residual Level">
               {risk.residualLevel}
             </Detail>
+            {risk.asset && <Detail label="Affected Asset">{risk.asset}</Detail>}
           </div>
 
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Risk Status
+              Update Status
             </p>
 
             <div className="flex flex-wrap gap-2">
@@ -1084,6 +1066,7 @@ function RiskDetailModal({
                 [
                   "Open",
                   "In Treatment",
+                  "Mitigated",
                   "Accepted",
                   "Closed",
                 ] as RiskStatus[]
@@ -1116,7 +1099,16 @@ function RiskDetailModal({
           </div>
         </div>
 
-        <div className="flex justifynd border-t border-slate-100 px-6 py-4">
+        <div className="flex justify-between border-t border-slate-100 px-6 py-4">
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-[11px] font-medium text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete Risk
+          </button>
+
           <button
             type="button"
             onClick={onClose}
@@ -1200,7 +1192,7 @@ function FilterSelect({
         ))}
       </select>
 
-      <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
     </div>
   );
 }
