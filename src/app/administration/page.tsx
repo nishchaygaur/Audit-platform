@@ -16,6 +16,9 @@ import {
   X,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
+import { hasPermission } from "@/lib/rbac";
+import { useRouter } from "next/navigation";
 
 type UserStatus = "Active" | "Inactive" | "Pending";
 
@@ -200,6 +203,14 @@ const emptyUser: Omit<PlatformUser, "id" | "lastLogin"> = {
 };
 
 export default function AdministrationPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && (!user || !hasPermission(user?.role, "workspace.manage"))) {
+      router.replace("/dashboard");
+    }
+  }, [user, loading, router]);
   const { currentWorkspace } = useWorkspace();
 
   const [users, setUsers] = useState<PlatformUser[]>([]);

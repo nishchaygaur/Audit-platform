@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { hasPermission } from "@/lib/rbac";
 import { signOut } from "@/actions/auth";
 
 
@@ -395,29 +396,29 @@ export default function Sidebar() {  const { user } = useAuth();
           </div>
 
           {/* Administration */}
-          <Link
-            href="/administration"
-            id="sidebar-nav-administration"
-            aria-current={isActive("/administration") ? "page" : undefined}
-            className={`group flex h-[34px] w-full items-center justify-between rounded-lg px-2.5 text-[13px] font-medium transition ${
-              isActive("/administration")
-                ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400/30"
-                : "text-slate-300 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <UsersRound
-                className={`h-[16px] w-[16px] shrink-0 transition ${
-                  isActive("/administration")
-                    ? "text-white"
-                    : "text-slate-400 group-hover:text-blue-300"
-                }`}
-                strokeWidth={1.9}
-              />
-              <span>Administration</span>
-            </div>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-white" />
-          </Link>
+          {hasPermission(user?.role, "workspace.manage") && (
+            <Link
+              href="/administration"
+              id="sidebar-nav-administration"
+              aria-current={isActive("/administration") ? "page" : undefined}
+              className={`group flex h-[34px] w-full items-center justify-between rounded-lg px-2.5 text-[13px] font-medium transition ${
+                isActive("/administration")
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Building2
+                  className={`h-4 w-4 ${
+                    isActive("/administration") ? "text-blue-400" : "text-slate-400"
+                  }`}
+                  strokeWidth={1.9}
+                />
+                <span>Administration</span>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-white" />
+            </Link>
+          )}
 
           {/* Settings */}
           <Link

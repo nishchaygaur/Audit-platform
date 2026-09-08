@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import type { ReactNode } from "react";
@@ -1206,6 +1205,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
     const allEvidence = getStoredEvidence();
     const filtered = allEvidence.filter((e) => e.auditId === audit.id);
     if (filtered.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEvidenceList(filtered);
     } else {
       // Create sensible defaults for this audit if none yet stored

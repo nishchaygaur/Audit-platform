@@ -28,6 +28,8 @@ import {
 
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
+import { hasPermission } from "@/lib/rbac";
 import { getStoredEvidence, saveStoredEvidence, EvidenceItem } from "@/lib/grcData";
 
 /* ============================================================
@@ -297,6 +299,7 @@ function getStatusClass(status: string) {
 ============================================================ */
 
 export default function AuditsPage() {
+  const { user } = useAuth();
   const router = useRouter();
   const workspace = useWorkspace();
   const { audits, addAudit } = useAudits();
@@ -518,6 +521,7 @@ export default function AuditsPage() {
               </p>
             </div>
 
+            {hasPermission(user?.role, "audits.create") && (
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -526,6 +530,7 @@ export default function AuditsPage() {
               <Plus className="h-4 w-4" />
               Create Audit
             </button>
+          )}
 
           </div>
 
