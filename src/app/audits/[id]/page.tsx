@@ -1991,7 +1991,7 @@ function FindingsPanel({ audit }: { audit: Audit }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {["All Severity", "Critical", "High", "Medium", "Low"].map((sev) => (
+          {["All Severity", "Critical", "High", "Medium", "Low", "Informational"].map((sev) => (
             <button
               key={sev}
               type="button"

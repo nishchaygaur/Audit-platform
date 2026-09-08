@@ -1,15 +1,19 @@
 "use client";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useEffect, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   getFindings,
   createFinding,
   updateFinding,
   deleteFinding as apiDeleteFinding,
+  type FindingSeverity,
+  type FindingStatus,
+  type FindingRecord,
+  VALID_FINDING_SEVERITIES,
+  VALID_FINDING_STATUSES,
 } from "@/actions/findings";
 import { getAudits } from "@/actions/audits";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
 
 import {
   Search,
@@ -28,21 +32,8 @@ import {
   Link2,
 } from "lucide-react";
 
-type FindingSeverity =
-  | "Critical"
-  | "High"
-  | "Medium"
-  | "Low";
-
-type FindingStatus =
-  | "Open"
-  | "In Progress"
-  | "Remediated"
-  | "Accepted Risk"
-  | "Closed";
-
 type Finding = {
-  id: string | number;
+  id: string;
   findingId: string;
   title: string;
   description: string;
@@ -55,26 +46,13 @@ type Finding = {
   identified: string;
   dueDate: string;
   auditId: string;
-  setAuditId: (value: string) => void;
-  audits: { id: string; name: string }[];
+  auditName?: string;
   evidence: string;
   recommendation: string;
 };
 
-const SEVERITY_OPTIONS: FindingSeverity[] = [
-  "Critical",
-  "High",
-  "Medium",
-  "Low",
-];
-
-const STATUS_OPTIONS: FindingStatus[] = [
-  "Open",
-  "In Progress",
-  
-  "Accepted Risk",
-  "Closed",
-];
+const SEVERITY_OPTIONS = [...VALID_FINDING_SEVERITIES];
+const STATUS_OPTIONS = [...VALID_FINDING_STATUSES];
 
 const FRAMEWORK_OPTIONS = [
   "All Frameworks",
@@ -85,16 +63,71 @@ const FRAMEWORK_OPTIONS = [
   "CIS Controls",
 ];
 
-
-
 export default function FindingsPage() {
   const { currentWorkspace } = useWorkspace();
   const [findings, setFindings] = useState<Finding[]>([]);
   const [audits, setAudits] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
-    if (currentWorkspace?.id) {
+  async function refreshData(workspaceId: string) {
+    try {
+      const [findingsRes, auditsRes] = await Promise.all([
+        getFindings(workspaceId),
+        getAudits(workspaceId),
+      ]);
+
+      if (findingsRes.success && findingsRes.data) {
+        setFindings(
+          (findingsRes.data as FindingRecord[]).map((f) => ({
+            id: f.id,
+            findingId: f.reference,
+            title: f.title,
+            description: f.description,
+            framework: f.framework,
+            control: f.control,
+            severity: f.severity,
+            owner: f.owner,
+            auditor: f.auditor,
+            identified: f.identified_date,
+            dueDate: f.due_date,
+            status: f.status,
+            evidence: f.evidence || "",
+            recommendation: f.recommendation || "",
+            auditId: f.audit_id,
+            auditName: f.audit_name,
+          }))
+        );
+      } else {
+        setFindings([]);
+      }
+
+      if (auditsRes.success && auditsRes.data) {
+        setAudits(
+          (auditsRes.data as { id: string; name: string }[]).map((a) => ({
+            id: a.id,
+            name: a.name,
+          }))
+        );
+      } else {
+        setAudits([]);
+      }
+    } catch {
+      setFindings([]);
+      setAudits([]);
+    }
+  }
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function fetchInitial() {
+      if (!currentWorkspace?.id) {
+        setFindings([]);
+        setAudits([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const [findingsRes, auditsRes] = await Promise.all([
@@ -102,11 +135,11 @@ export default function FindingsPage() {
           getAudits(currentWorkspace.id),
         ]);
 
+        if (isCancelled) return;
+
         if (findingsRes.success && findingsRes.data) {
           setFindings(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            findingsRes.data.map((f: any) => ({
-              ...f,
+            (findingsRes.data as FindingRecord[]).map((f) => ({
               id: f.id,
               findingId: f.reference,
               title: f.title,
@@ -119,8 +152,8 @@ export default function FindingsPage() {
               identified: f.identified_date,
               dueDate: f.due_date,
               status: f.status,
-              evidence: f.evidence,
-              recommendation: f.recommendation,
+              evidence: f.evidence || "",
+              recommendation: f.recommendation || "",
               auditId: f.audit_id,
               auditName: f.audit_name,
             }))
@@ -140,19 +173,18 @@ export default function FindingsPage() {
           setAudits([]);
         }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
-    } else {
-      setFindings([]);
-      setAudits([]);
-      setLoading(false);
     }
-  }, [currentWorkspace?.id]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, [loadData]);
+    fetchInitial();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentWorkspace?.id]);
 
   const [search, setSearch] = useState("");
 
@@ -175,7 +207,7 @@ export default function FindingsPage() {
   const [selectedFinding, setSelectedFinding] =
     useState<Finding | null>(null);
 
-  const [openMenu, setOpenMenu] = useState<number | string | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const [formReference, setFormReference] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -267,12 +299,15 @@ export default function FindingsPage() {
     setFormDueDate("");
     setFormEvidence("");
     setFormRecommendation("");
-    setFormAuditId("");
+    setFormAuditId(audits[0]?.id || "");
   }
 
   function openAddFinding() {
     setEditingFinding(null);
     resetForm();
+    if (audits.length > 0) {
+      setFormAuditId(audits[0].id);
+    }
     setShowModal(true);
   }
 
@@ -291,19 +326,20 @@ export default function FindingsPage() {
     setFormDueDate(item.dueDate || "");
     setFormEvidence(item.evidence || "");
     setFormRecommendation(item.recommendation || "");
-    setFormAuditId(item.auditId?.toString() || "");
+    setFormAuditId(item.auditId || audits[0]?.id || "");
 
     setOpenMenu(null);
     setShowModal(true);
   }
 
   async function saveFinding() {
+    const targetAuditId = formAuditId || audits[0]?.id;
     if (
       !formTitle.trim() ||
       !formDescription.trim() ||
       !formControl.trim() ||
       !currentWorkspace?.id ||
-      !formAuditId
+      !targetAuditId
     ) {
       return;
     }
@@ -311,7 +347,7 @@ export default function FindingsPage() {
     if (editingFinding) {
       const res = await updateFinding(
         currentWorkspace.id,
-        editingFinding.id.toString(),
+        editingFinding.id,
         {
           reference: formReference.trim() || undefined,
           title: formTitle.trim(),
@@ -326,14 +362,14 @@ export default function FindingsPage() {
           evidence: formEvidence.trim() || undefined,
           recommendation: formRecommendation.trim() || undefined,
         },
-        formAuditId
+        targetAuditId
       );
-      if (res.success) {
-        await loadData();
+      if (res.success && currentWorkspace?.id) {
+        await refreshData(currentWorkspace.id);
       }
     } else {
       const res = await createFinding(currentWorkspace.id, {
-        auditId: formAuditId,
+        auditId: targetAuditId,
         reference: formReference.trim() || undefined,
         title: formTitle.trim(),
         description: formDescription.trim(),
@@ -347,8 +383,8 @@ export default function FindingsPage() {
         evidence: formEvidence.trim() || undefined,
         recommendation: formRecommendation.trim() || undefined,
       });
-      if (res.success) {
-        await loadData();
+      if (res.success && currentWorkspace?.id) {
+        await refreshData(currentWorkspace.id);
       }
     }
 
@@ -356,7 +392,7 @@ export default function FindingsPage() {
   }
 
   async function deleteFinding(item: Finding) {
-    if (!currentWorkspace?.id || !item.auditId?.toString()) return;
+    if (!currentWorkspace?.id || !item.auditId) return;
 
     const confirmed = window.confirm(
       `Delete finding "${item.title}"?`
@@ -365,17 +401,17 @@ export default function FindingsPage() {
 
     const res = await apiDeleteFinding(
       currentWorkspace.id,
-      item.id.toString().toString(),
-      item.auditId?.toString()
+      item.id,
+      item.auditId
     );
 
-    if (res.success) {
-      await loadData();
+    if (res.success && currentWorkspace?.id) {
+      await refreshData(currentWorkspace.id);
     }
 
     setOpenMenu(null);
 
-    if (selectedFinding?.id === item.id.toString().toString()) {
+    if (selectedFinding?.id === item.id) {
       setSelectedFinding(null);
     }
   }
@@ -384,20 +420,20 @@ export default function FindingsPage() {
     item: Finding,
     status: FindingStatus
   ) {
-    if (!currentWorkspace?.id || !item.auditId?.toString()) return;
+    if (!currentWorkspace?.id || !item.auditId) return;
     const res = await updateFinding(
       currentWorkspace.id,
-      item.id.toString().toString(),
+      item.id,
       { status },
-      item.auditId?.toString()
+      item.auditId
     );
-    if (res.success) {
-      await loadData();
+    if (res.success && currentWorkspace?.id) {
+      await refreshData(currentWorkspace.id);
     }
 
     setOpenMenu(null);
 
-    if (selectedFinding?.id === item.id.toString().toString()) {
+    if (selectedFinding?.id === item.id) {
       setSelectedFinding({
         ...item,
         status,
@@ -409,18 +445,25 @@ export default function FindingsPage() {
     item: Finding,
     severity: FindingSeverity
   ) {
-    if (!currentWorkspace?.id || !item.auditId?.toString()) return;
+    if (!currentWorkspace?.id || !item.auditId) return;
     const res = await updateFinding(
       currentWorkspace.id,
-      item.id.toString().toString(),
+      item.id,
       { severity },
-      item.auditId?.toString()
+      item.auditId
     );
-    if (res.success) {
-      await loadData();
+    if (res.success && currentWorkspace?.id) {
+      await refreshData(currentWorkspace.id);
     }
 
     setOpenMenu(null);
+
+    if (selectedFinding?.id === item.id) {
+      setSelectedFinding({
+        ...item,
+        severity,
+      });
+    }
   }
 
   return (
@@ -626,25 +669,19 @@ export default function FindingsPage() {
                   {filteredFindings.length > 0 ? (
                     filteredFindings.map((item) => (
                       <FindingRow
-                        key={item.id.toString().toString()}
+                        key={item.id}
                         item={item}
-                        menuOpen={
-                          openMenu === item.id.toString().toString().toString()
-                        }
+                        menuOpen={openMenu === item.id}
                         onMenu={() =>
-                          setOpenMenu(
-                            openMenu === item.id.toString().toString().toString()
-                              ? null
-                              : item.id.toString().toString()
-                          )
+                          setOpenMenu(openMenu === item.id ? null : item.id)
                         }
                         onView={() => {
                           setSelectedFinding(item);
                           setOpenMenu(null);
                         }}
-                        onEdit={() =>
-                          openEditFinding(item)
-                        }
+                        onEdit={() => openEditFinding(item)}
+                        onOpenStatus={() => changeStatus(item, "Open")}
+                        onInProgress={() => changeStatus(item, "In Progress")}
                         onAccept={() =>
                           changeStatus(
                             item,
@@ -685,6 +722,12 @@ export default function FindingsPage() {
                           changeSeverity(
                             item,
                             "Low"
+                          )
+                        }
+                        onInformational={() =>
+                          changeSeverity(
+                            item,
+                            "Informational"
                           )
                         }
                         onDelete={() =>
@@ -948,6 +991,8 @@ function FindingRow({
   onMenu,
   onView,
   onEdit,
+  onOpenStatus,
+  onInProgress,
   onAccept,
   onResolve,
   onCloseFinding,
@@ -955,6 +1000,7 @@ function FindingRow({
   onHigh,
   onMedium,
   onLow,
+  onInformational,
   onDelete,
 }: {
   item: Finding;
@@ -962,6 +1008,8 @@ function FindingRow({
   onMenu: () => void;
   onView: () => void;
   onEdit: () => void;
+  onOpenStatus: () => void;
+  onInProgress: () => void;
   onAccept: () => void;
   onResolve: () => void;
   onCloseFinding: () => void;
@@ -969,6 +1017,7 @@ function FindingRow({
   onHigh: () => void;
   onMedium: () => void;
   onLow: () => void;
+  onInformational: () => void;
   onDelete: () => void;
 }) {
   const severityClass =
@@ -978,7 +1027,9 @@ function FindingRow({
         ? "bg-orange-50 text-orange-700"
         : item.severity === "Medium"
           ? "bg-amber-50 text-amber-700"
-          : "bg-slate-100 text-slate-600";
+          : item.severity === "Low"
+            ? "bg-slate-100 text-slate-600"
+            : "bg-blue-50 text-blue-700";
 
   const statusClass =
     item.status === "Remediated" ||
@@ -1124,42 +1175,78 @@ function FindingRow({
               >
                 Low
               </button>
+
+              <button
+                type="button"
+                onClick={onInformational}
+                className="col-span-2 rounded px-2 py-1.5 text-[9px] text-blue-600 hover:bg-blue-50"
+              >
+                Informational
+              </button>
             </div>
 
             <div className="my-1 border-t border-slate-100" />
 
-            {item.status !== "Remediated" && (
-              <button
-                type="button"
-                onClick={onResolve}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Mark Resolved
-              </button>
-            )}
+            <p className="px-3 py-1.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400">
+              Change Status
+            </p>
 
-            {item.status !== "Accepted Risk" && (
-              <button
-                type="button"
-                onClick={onAccept}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-violet-600 hover:bg-violet-50"
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Accept Risk
-              </button>
-            )}
+            <div className="flex flex-col px-1 pb-1">
+              {item.status !== "Open" && (
+                <button
+                  type="button"
+                  onClick={onOpenStatus}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[10px] text-slate-600 hover:bg-slate-50"
+                >
+                  <Clock3 className="h-3.5 w-3.5" />
+                  Mark Open
+                </button>
+              )}
 
-            {item.status !== "Closed" && (
-              <button
-                type="button"
-                onClick={onCloseFinding}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-blue-600 hover:bg-blue-50"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Close Finding
-              </button>
-            )}
+              {item.status !== "In Progress" && (
+                <button
+                  type="button"
+                  onClick={onInProgress}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[10px] text-blue-600 hover:bg-blue-50"
+                >
+                  <Clock3 className="h-3.5 w-3.5" />
+                  Mark In Progress
+                </button>
+              )}
+
+              {item.status !== "Remediated" && (
+                <button
+                  type="button"
+                  onClick={onResolve}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[10px] text-emerald-600 hover:bg-emerald-50"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Mark Remediated
+                </button>
+              )}
+
+              {item.status !== "Accepted Risk" && (
+                <button
+                  type="button"
+                  onClick={onAccept}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[10px] text-violet-600 hover:bg-violet-50"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Accept Risk
+                </button>
+              )}
+
+              {item.status !== "Closed" && (
+                <button
+                  type="button"
+                  onClick={onCloseFinding}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[10px] text-slate-700 hover:bg-slate-50"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Close Finding
+                </button>
+              )}
+            </div>
 
             <div className="my-1 border-t border-slate-100" />
 
@@ -1297,15 +1384,21 @@ function FindingModal({
         </div>
 
         <div className="space-y-4 px-6 py-5">
-
-
           <div className="mb-4">
-            <SelectField
-              label="Associated Audit"
+            <label className="mb-1.5 block text-[9px] font-medium uppercase tracking-wide text-slate-400">
+              Associated Audit
+            </label>
+            <select
               value={auditId}
-              options={audits.map((a: { id: string; name: string }) => a.id)}
-              onChange={setAuditId}
-            />
+              onChange={(e) => setAuditId(e.target.value)}
+              className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none focus:border-blue-400"
+            >
+              {audits.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.id} - {a.name}
+                </option>
+              ))}
+            </select>
           </div>
           <FormField
             label="Finding Title"

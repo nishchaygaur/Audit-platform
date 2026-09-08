@@ -34,6 +34,27 @@ export const VALID_FINDING_STATUSES: readonly FindingStatus[] = [
   "Closed",
 ] as const;
 
+export type FindingRecord = {
+  id: string;
+  workspace_id: string;
+  audit_id: string;
+  reference: string;
+  title: string;
+  description: string;
+  framework: string;
+  control: string;
+  severity: FindingSeverity;
+  owner: string;
+  identified_date: string;
+  due_date: string;
+  status: FindingStatus;
+  recommendation: string;
+  evidence: string;
+  auditor: string;
+  created_at: string;
+  audit_name?: string;
+};
+
 function normalizeStatus(status?: string): FindingStatus | undefined {
   if (!status) return undefined;
   const trimmed = status.trim();
