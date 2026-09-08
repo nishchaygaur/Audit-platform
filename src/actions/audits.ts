@@ -59,11 +59,10 @@ export async function getAudits(workspaceId: string) {
 
   try {
     await requirePermission("audits.view", workspaceId);
-    const audits = db
-      .prepare(
-        `SELECT * FROM audits WHERE workspace_id = ? ORDER BY created_at DESC`
-      )
-      .all(workspaceId);
+    const audits = await db.query(
+      `SELECT * FROM audits WHERE workspace_id = $1 ORDER BY created_at DESC`,
+      [workspaceId]
+    );
     return { success: true, data: audits };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch audits";
@@ -78,9 +77,10 @@ export async function getAudit(workspaceId: string, auditId: string) {
 
   try {
     await requirePermission("audits.view", workspaceId);
-    const audit = db
-      .prepare(`SELECT * FROM audits WHERE id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId);
+    const audit = await db.queryOne(
+      `SELECT * FROM audits WHERE id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
+    );
 
     if (!audit) {
       return { success: false, error: "Audit not found" };
@@ -129,28 +129,31 @@ export async function createAudit(workspaceId: string, data: CreateAuditInput) {
     const findings = Number(data.findings) || 0;
     const risks = Number(data.risks) || 0;
 
-    db.prepare(`
+    await db.execute(
+      `
       INSERT INTO audits (
         id, workspace_id, name, framework, lead, status, progress,
         start_date, due_date, objective, scope, controls, evidence, findings, risks
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      workspaceId,
-      data.name.trim(),
-      framework,
-      lead,
-      status,
-      progress,
-      startDate,
-      dueDate,
-      objective,
-      scope,
-      controls,
-      evidence,
-      findings,
-      risks
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `,
+      [
+        id,
+        workspaceId,
+        data.name.trim(),
+        framework,
+        lead,
+        status,
+        progress,
+        startDate,
+        dueDate,
+        objective,
+        scope,
+        controls,
+        evidence,
+        findings,
+        risks,
+      ]
     );
 
     const createdAudit = {
@@ -199,9 +202,10 @@ export async function updateAudit(
   try {
     await requirePermission("audits.update", workspaceId);
 
-    const existing = db
-      .prepare(`SELECT * FROM audits WHERE id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId) as { id: string; name: string; status: string } | undefined;
+    const existing = await db.queryOne<{ id: string; name: string; status: string }>(
+      `SELECT * FROM audits WHERE id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
+    );
 
     if (!existing) {
       return { success: false, error: "Audit not found" };
@@ -211,69 +215,74 @@ export async function updateAudit(
     const values: (string | number)[] = [];
 
     if (updates.name !== undefined) {
-      setParts.push("name = ?");
       values.push(updates.name.trim());
+      setParts.push(`name = $${values.length}`);
     }
     if (updates.framework !== undefined) {
-      setParts.push("framework = ?");
       values.push(updates.framework);
+      setParts.push(`framework = $${values.length}`);
     }
     if (updates.lead !== undefined) {
-      setParts.push("lead = ?");
       values.push(updates.lead);
+      setParts.push(`lead = $${values.length}`);
     }
     if (updates.status !== undefined) {
       if (!VALID_AUDIT_STATUSES.includes(updates.status)) {
         return { success: false, error: "Invalid audit status" };
       }
-      setParts.push("status = ?");
       values.push(updates.status);
+      setParts.push(`status = $${values.length}`);
     }
     if (updates.progress !== undefined) {
-      setParts.push("progress = ?");
       values.push(Math.max(0, Math.min(100, Number(updates.progress) || 0)));
+      setParts.push(`progress = $${values.length}`);
     }
     if (updates.startDate !== undefined) {
-      setParts.push("start_date = ?");
       values.push(updates.startDate);
+      setParts.push(`start_date = $${values.length}`);
     }
     if (updates.dueDate !== undefined) {
-      setParts.push("due_date = ?");
       values.push(updates.dueDate);
+      setParts.push(`due_date = $${values.length}`);
     }
     if (updates.objective !== undefined) {
-      setParts.push("objective = ?");
       values.push(updates.objective);
+      setParts.push(`objective = $${values.length}`);
     }
     if (updates.scope !== undefined) {
-      setParts.push("scope = ?");
       values.push(updates.scope);
+      setParts.push(`scope = $${values.length}`);
     }
     if (updates.controls !== undefined) {
-      setParts.push("controls = ?");
       values.push(Number(updates.controls) || 0);
+      setParts.push(`controls = $${values.length}`);
     }
     if (updates.evidence !== undefined) {
-      setParts.push("evidence = ?");
       values.push(Number(updates.evidence) || 0);
+      setParts.push(`evidence = $${values.length}`);
     }
     if (updates.findings !== undefined) {
-      setParts.push("findings = ?");
       values.push(Number(updates.findings) || 0);
+      setParts.push(`findings = $${values.length}`);
     }
     if (updates.risks !== undefined) {
-      setParts.push("risks = ?");
       values.push(Number(updates.risks) || 0);
+      setParts.push(`risks = $${values.length}`);
     }
 
     if (setParts.length === 0) {
       return { success: true };
     }
 
-    values.push(auditId, workspaceId);
-    db.prepare(
-      `UPDATE audits SET ${setParts.join(", ")} WHERE id = ? AND workspace_id = ?`
-    ).run(...values);
+    values.push(auditId);
+    const auditIdParamIdx = values.length;
+    values.push(workspaceId);
+    const workspaceIdParamIdx = values.length;
+
+    await db.execute(
+      `UPDATE audits SET ${setParts.join(", ")} WHERE id = $${auditIdParamIdx} AND workspace_id = $${workspaceIdParamIdx}`,
+      values
+    );
 
     let desc = `Updated audit "${existing.name}"`;
     if (updates.status && updates.status !== existing.status) {
@@ -304,17 +313,18 @@ export async function deleteAudit(workspaceId: string, auditId: string) {
   try {
     await requirePermission("audits.delete", workspaceId);
 
-    const existing = db
-      .prepare(`SELECT id, name FROM audits WHERE id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId) as { id: string; name: string } | undefined;
+    const existing = await db.queryOne<{ id: string; name: string }>(
+      `SELECT id, name FROM audits WHERE id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
+    );
 
     if (!existing) {
       return { success: false, error: "Audit not found" };
     }
 
-    db.prepare(`DELETE FROM audits WHERE id = ? AND workspace_id = ?`).run(
-      auditId,
-      workspaceId
+    await db.execute(
+      `DELETE FROM audits WHERE id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
     );
 
     await logAuditEvent({

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import { WorkspaceProvider } from "@/context/WorkspaceContext";
 import { AuditProvider } from "@/context/AuditContext";
@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   title: "Audit Platform",
   description: "Cybersecurity Audit and GRC Platform",
 };
+
+export const dynamic = "force-dynamic";
 
 export default async function RootLayout({
   children,
@@ -28,7 +30,9 @@ export default async function RootLayout({
           <WorkspaceProvider initialWorkspaces={initialWorkspaces}>
             <AuditProvider>
               <div className="flex h-screen overflow-hidden">
-                <Sidebar />
+                <Suspense fallback={null}>
+                  <Sidebar />
+                </Suspense>
                 <div className="flex flex-1 flex-col overflow-hidden">
                   <main className="flex-1 overflow-y-auto">
                     {children}

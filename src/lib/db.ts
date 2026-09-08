@@ -1,45 +1,125 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { Pool, PoolClient, QueryResultRow } from 'pg';
 
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Lazy pool initialization to support serverless lifecycle and avoid module-eval crashes if DATABASE_URL is not yet bound
+let globalPool: Pool | null = null;
+
+export function getPool(): Pool {
+  if (!globalPool) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL environment variable is required to connect to PostgreSQL");
+    }
+
+    const isSsl = connectionString.includes('sslmode=require') || 
+                  connectionString.includes('neon.tech') || 
+                  connectionString.includes('supabase') || 
+                  process.env.NODE_ENV === 'production';
+
+    globalPool = new Pool({
+      connectionString,
+      ssl: isSsl ? { rejectUnauthorized: false } : false,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+  }
+  return globalPool;
 }
 
-const dbPath = path.join(dataDir, 'audit.db');
-const db = new Database(dbPath);
+export interface TransactionClient {
+  query: <T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => Promise<T[]>;
+  queryOne: <T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) => Promise<T | undefined>;
+  execute: (text: string, params?: unknown[]) => Promise<{ rowCount: number }>;
+}
 
-db.pragma('journal_mode = WAL');
+export async function query<T extends QueryResultRow = QueryResultRow>(
+  text: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  const pool = getPool();
+  const res = await pool.query<T>(text, params);
+  return res.rows;
+}
 
-db.exec(`
+export async function queryOne<T extends QueryResultRow = QueryResultRow>(
+  text: string,
+  params: unknown[] = []
+): Promise<T | undefined> {
+  const pool = getPool();
+  const res = await pool.query<T>(text, params);
+  return res.rows[0] ?? undefined;
+}
+
+export async function execute(
+  text: string,
+  params: unknown[] = []
+): Promise<{ rowCount: number }> {
+  const pool = getPool();
+  const res = await pool.query(text, params);
+  return { rowCount: res.rowCount ?? 0 };
+}
+
+export async function transaction<T>(
+  callback: (client: TransactionClient) => Promise<T>
+): Promise<T> {
+  const pool = getPool();
+  const client: PoolClient = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const txClient: TransactionClient = {
+      query: async <R extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]): Promise<R[]> => {
+        const res = await client.query<R>(text, params);
+        return res.rows;
+      },
+      queryOne: async <R extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]): Promise<R | undefined> => {
+        const res = await client.query<R>(text, params);
+        return res.rows[0] ?? undefined;
+      },
+      execute: async (text: string, params?: unknown[]): Promise<{ rowCount: number }> => {
+        const res = await client.query(text, params);
+        return { rowCount: res.rowCount ?? 0 };
+      },
+    };
+
+    const result = await callback(txClient);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export const POSTGRES_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'Viewer',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS user_workspaces (
-    user_id TEXT NOT NULL,
-    workspace_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     role TEXT NOT NULL,
-    PRIMARY KEY (user_id, workspace_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    PRIMARY KEY (user_id, workspace_id)
   );
 
   CREATE TABLE IF NOT EXISTS audits (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     framework TEXT NOT NULL,
     lead TEXT NOT NULL,
@@ -53,14 +133,13 @@ db.exec(`
     evidence INTEGER NOT NULL DEFAULT 0,
     findings INTEGER NOT NULL DEFAULT 0,
     risks INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS findings (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL,
-    audit_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    audit_id TEXT NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
     reference TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -74,15 +153,13 @@ db.exec(`
     recommendation TEXT DEFAULT '',
     evidence TEXT DEFAULT '',
     auditor TEXT DEFAULT '',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS risks (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL,
-    audit_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    audit_id TEXT NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -99,15 +176,15 @@ db.exec(`
     residual_score INTEGER NOT NULL,
     residual_level TEXT NOT NULL,
     status TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
+    asset TEXT DEFAULT '',
+    identified_date TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS evidence (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL,
-    audit_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    audit_id TEXT NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
     reference TEXT NOT NULL,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -119,15 +196,13 @@ db.exec(`
     size TEXT DEFAULT '',
     framework TEXT DEFAULT '',
     reviewed_by TEXT DEFAULT '',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS audit_trail (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     user_name TEXT NOT NULL,
     user_email TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -135,9 +210,7 @@ db.exec(`
     entity_id TEXT NOT NULL,
     description TEXT NOT NULL,
     details TEXT DEFAULT '',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE INDEX IF NOT EXISTS idx_audits_workspace ON audits(workspace_id);
@@ -150,42 +223,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_trail_workspace ON audit_trail(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_audit_trail_created_at ON audit_trail(created_at);
   CREATE INDEX IF NOT EXISTS idx_audit_trail_entity ON audit_trail(entity_type, entity_id);
-`);
+`;
 
-// Safe migrations for evidence columns
-const evidenceColumns = (db.pragma("table_info(evidence)") as { name: string }[]).map((c) => c.name);
-if (!evidenceColumns.includes("description")) {
-  db.exec("ALTER TABLE evidence ADD COLUMN description TEXT DEFAULT ''");
-}
-if (!evidenceColumns.includes("size")) {
-  db.exec("ALTER TABLE evidence ADD COLUMN size TEXT DEFAULT ''");
-}
-if (!evidenceColumns.includes("framework")) {
-  db.exec("ALTER TABLE evidence ADD COLUMN framework TEXT DEFAULT ''");
-}
-if (!evidenceColumns.includes("reviewed_by")) {
-  db.exec("ALTER TABLE evidence ADD COLUMN reviewed_by TEXT DEFAULT ''");
+export async function ensureSchema(): Promise<void> {
+  const pool = getPool();
+  await pool.query(POSTGRES_SCHEMA_SQL);
 }
 
-// Safe migrations for findings columns
-const findingColumns = (db.pragma("table_info(findings)") as { name: string }[]).map((c) => c.name);
-if (!findingColumns.includes("recommendation")) {
-  db.exec("ALTER TABLE findings ADD COLUMN recommendation TEXT DEFAULT ''");
-}
-if (!findingColumns.includes("evidence")) {
-  db.exec("ALTER TABLE findings ADD COLUMN evidence TEXT DEFAULT ''");
-}
-if (!findingColumns.includes("auditor")) {
-  db.exec("ALTER TABLE findings ADD COLUMN auditor TEXT DEFAULT ''");
-}
-
-// Safe migrations for risks columns
-const riskColumns = (db.pragma("table_info(risks)") as { name: string }[]).map((c) => c.name);
-if (!riskColumns.includes("asset")) {
-  db.exec("ALTER TABLE risks ADD COLUMN asset TEXT DEFAULT ''");
-}
-if (!riskColumns.includes("identified_date")) {
-  db.exec("ALTER TABLE risks ADD COLUMN identified_date TEXT DEFAULT ''");
-}
+const db = {
+  getPool,
+  query,
+  queryOne,
+  execute,
+  transaction,
+  ensureSchema,
+};
 
 export default db;

@@ -107,16 +107,16 @@ function calculateRiskLevel(score: number): RiskLevel {
   return "Low";
 }
 
-function updateAuditRiskCount(auditId: string, workspaceId: string) {
+async function updateAuditRiskCount(auditId: string, workspaceId: string) {
   try {
-    const row = db
-      .prepare(`SELECT COUNT(*) as count FROM risks WHERE audit_id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId) as { count: number } | undefined;
-    const count = row?.count || 0;
-    db.prepare(`UPDATE audits SET risks = ? WHERE id = ? AND workspace_id = ?`).run(
-      count,
-      auditId,
-      workspaceId
+    const row = await db.queryOne<{ count: string | number }>(
+      `SELECT COUNT(*) as count FROM risks WHERE audit_id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
+    );
+    const count = row?.count ? Number(row.count) : 0;
+    await db.execute(
+      `UPDATE audits SET risks = $1 WHERE id = $2 AND workspace_id = $3`,
+      [count, auditId, workspaceId]
     );
   } catch (err) {
     console.error("Failed to update audit risk count:", err);
@@ -135,18 +135,18 @@ export async function getRisks(workspaceId: string, auditId?: string) {
       SELECT r.*, a.name as audit_name
       FROM risks r
       LEFT JOIN audits a ON r.audit_id = a.id
-      WHERE r.workspace_id = ?
+      WHERE r.workspace_id = $1
     `;
     const params: (string | number)[] = [workspaceId];
 
     if (auditId) {
-      query += ` AND r.audit_id = ?`;
       params.push(auditId);
+      query += ` AND r.audit_id = $${params.length}`;
     }
 
     query += ` ORDER BY r.created_at DESC`;
 
-    const risks = db.prepare(query).all(...params) as RiskRecord[];
+    const risks = await db.query<RiskRecord>(query, params);
     return { success: true, data: risks };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to retrieve risks";
@@ -165,14 +165,13 @@ export async function getRisk(workspaceId: string, riskId: string) {
   try {
     await requirePermission("risks.view", workspaceId);
 
-    const risk = db
-      .prepare(
-        `SELECT r.*, a.name as audit_name
-         FROM risks r
-         LEFT JOIN audits a ON r.audit_id = a.id
-         WHERE r.id = ? AND r.workspace_id = ?`
-      )
-      .get(riskId, workspaceId) as RiskRecord | undefined;
+    const risk = await db.queryOne<RiskRecord>(
+      `SELECT r.*, a.name as audit_name
+       FROM risks r
+       LEFT JOIN audits a ON r.audit_id = a.id
+       WHERE r.id = $1 AND r.workspace_id = $2`,
+      [riskId, workspaceId]
+    );
 
     if (!risk) {
       return { success: false, error: "Risk not found" };
@@ -204,9 +203,10 @@ export async function createRisk(workspaceId: string, data: CreateRiskInput) {
     let auditId = data.auditId;
     if (!auditId) {
       // Find the first audit in the workspace if none provided
-      const firstAudit = db
-        .prepare(`SELECT id, framework, lead FROM audits WHERE workspace_id = ? LIMIT 1`)
-        .get(workspaceId) as { id: string; framework: string; lead: string } | undefined;
+      const firstAudit = await db.queryOne<{ id: string; framework: string; lead: string }>(
+        `SELECT id, framework, lead FROM audits WHERE workspace_id = $1 LIMIT 1`,
+        [workspaceId]
+      );
       if (firstAudit) {
         auditId = firstAudit.id;
       } else {
@@ -214,9 +214,10 @@ export async function createRisk(workspaceId: string, data: CreateRiskInput) {
       }
     }
 
-    const audit = db
-      .prepare(`SELECT id, framework, lead FROM audits WHERE id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId) as { id: string; framework: string; lead: string } | undefined;
+    const audit = await db.queryOne<{ id: string; framework: string; lead: string }>(
+      `SELECT id, framework, lead FROM audits WHERE id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
+    );
 
     if (!audit) {
       return { success: false, error: "Audit not found in this workspace" };
@@ -256,38 +257,41 @@ export async function createRisk(workspaceId: string, data: CreateRiskInput) {
     const asset = data.asset?.trim() || "Core Infrastructure";
     const identifiedDate = data.identifiedDate || new Date().toISOString().split("T")[0];
 
-    db.prepare(`
+    await db.execute(
+      `
       INSERT INTO risks (
         id, workspace_id, audit_id, title, description, category, finding,
         framework, control, likelihood, impact, score, level, treatment,
         owner, due_date, residual_score, residual_level, status, asset, identified_date
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      workspaceId,
-      auditId,
-      title,
-      description,
-      category,
-      finding,
-      framework,
-      control,
-      likelihoodStr,
-      impactStr,
-      score,
-      level,
-      treatment,
-      owner,
-      dueDate,
-      residualScore,
-      residualLevel,
-      status,
-      asset,
-      identifiedDate
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      `,
+      [
+        id,
+        workspaceId,
+        auditId,
+        title,
+        description,
+        category,
+        finding,
+        framework,
+        control,
+        likelihoodStr,
+        impactStr,
+        score,
+        level,
+        treatment,
+        owner,
+        dueDate,
+        residualScore,
+        residualLevel,
+        status,
+        asset,
+        identifiedDate,
+      ]
     );
 
-    updateAuditRiskCount(auditId, workspaceId);
+    await updateAuditRiskCount(auditId, workspaceId);
 
     const createdRisk: RiskRecord = {
       id,
@@ -345,18 +349,20 @@ export async function updateRisk(
   try {
     await requirePermission("risks.update", workspaceId);
 
-    const existing = db
-      .prepare(`SELECT * FROM risks WHERE id = ? AND workspace_id = ?`)
-      .get(riskId, workspaceId) as RiskRecord | undefined;
+    const existing = await db.queryOne<RiskRecord>(
+      `SELECT * FROM risks WHERE id = $1 AND workspace_id = $2`,
+      [riskId, workspaceId]
+    );
 
     if (!existing) {
       return { success: false, error: "Risk not found" };
     }
 
     if (updates.auditId && updates.auditId !== existing.audit_id) {
-      const audit = db
-        .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
-        .get(updates.auditId, workspaceId);
+      const audit = await db.queryOne<{ id: string }>(
+        `SELECT id FROM audits WHERE id = $1 AND workspace_id = $2`,
+        [updates.auditId, workspaceId]
+      );
       if (!audit) {
         return { success: false, error: "Target audit not found in this workspace" };
       }
@@ -395,41 +401,44 @@ export async function updateRisk(
 
     const residualLevel = updates.residualLevel || calculateRiskLevel(residualScore);
 
-    db.prepare(`
+    await db.execute(
+      `
       UPDATE risks
-      SET audit_id = ?, title = ?, description = ?, category = ?, finding = ?,
-          framework = ?, control = ?, likelihood = ?, impact = ?, score = ?,
-          level = ?, treatment = ?, owner = ?, due_date = ?, residual_score = ?,
-          residual_level = ?, status = ?, asset = ?, identified_date = ?
-      WHERE id = ? AND workspace_id = ?
-    `).run(
-      auditId,
-      title,
-      description,
-      category,
-      finding,
-      framework,
-      control,
-      likelihood,
-      impact,
-      score,
-      level,
-      treatment,
-      owner,
-      dueDate,
-      residualScore,
-      residualLevel,
-      status,
-      asset,
-      identifiedDate,
-      riskId,
-      workspaceId
+      SET audit_id = $1, title = $2, description = $3, category = $4, finding = $5,
+          framework = $6, control = $7, likelihood = $8, impact = $9, score = $10,
+          level = $11, treatment = $12, owner = $13, due_date = $14, residual_score = $15,
+          residual_level = $16, status = $17, asset = $18, identified_date = $19
+      WHERE id = $20 AND workspace_id = $21
+      `,
+      [
+        auditId,
+        title,
+        description,
+        category,
+        finding,
+        framework,
+        control,
+        likelihood,
+        impact,
+        score,
+        level,
+        treatment,
+        owner,
+        dueDate,
+        residualScore,
+        residualLevel,
+        status,
+        asset,
+        identifiedDate,
+        riskId,
+        workspaceId,
+      ]
     );
 
     if (existing.audit_id !== auditId) {
-      updateAuditRiskCount(existing.audit_id, workspaceId);
+      await updateAuditRiskCount(existing.audit_id, workspaceId);
     }
-    updateAuditRiskCount(auditId, workspaceId);
+    await updateAuditRiskCount(auditId, workspaceId);
 
     let desc = `Updated risk "${title}"`;
     if (updates.status && updates.status !== existing.status) {
@@ -489,17 +498,18 @@ export async function deleteRisk(workspaceId: string, riskId: string) {
   try {
     await requirePermission("risks.delete", workspaceId);
 
-    const existing = db
-      .prepare(`SELECT audit_id, title FROM risks WHERE id = ? AND workspace_id = ?`)
-      .get(riskId, workspaceId) as { audit_id: string; title: string } | undefined;
+    const existing = await db.queryOne<{ audit_id: string; title: string }>(
+      `SELECT audit_id, title FROM risks WHERE id = $1 AND workspace_id = $2`,
+      [riskId, workspaceId]
+    );
 
     if (!existing) {
       return { success: false, error: "Risk not found" };
     }
 
-    db.prepare(`DELETE FROM risks WHERE id = ? AND workspace_id = ?`).run(riskId, workspaceId);
+    await db.execute(`DELETE FROM risks WHERE id = $1 AND workspace_id = $2`, [riskId, workspaceId]);
 
-    updateAuditRiskCount(existing.audit_id, workspaceId);
+    await updateAuditRiskCount(existing.audit_id, workspaceId);
 
     await logAuditEvent({
       workspaceId,
@@ -518,4 +528,5 @@ export async function deleteRisk(workspaceId: string, riskId: string) {
     };
   }
 }
+
 

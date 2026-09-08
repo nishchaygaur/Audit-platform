@@ -21,7 +21,10 @@ export async function requirePermission(permission: Permission, workspaceId: str
   }
 
   // Fetch the authoritative role from the DB for this specific workspace
-  const membership = db.prepare('SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?').get(session.user.id, workspaceId) as { role: string } | undefined;
+  const membership = await db.queryOne<{ role: string }>(
+    'SELECT role FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2',
+    [session.user.id, workspaceId]
+  );
 
   if (!membership) {
     throw new AuthorizationError("Forbidden: User is not a member of this workspace");

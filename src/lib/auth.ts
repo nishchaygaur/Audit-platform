@@ -1,10 +1,16 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'super-secret-key-for-audit-platform-dev';
-const key = new TextEncoder().encode(SECRET_KEY);
+function getJwtKey(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export async function encrypt(payload: Record<string, unknown>) {
+  const key = getJwtKey();
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -14,11 +20,12 @@ export async function encrypt(payload: Record<string, unknown>) {
 
 export async function decrypt(input: string): Promise<Record<string, unknown> | null> {
   try {
+    const key = getJwtKey();
     const { payload } = await jwtVerify(input, key, {
       algorithms: ['HS256'],
     });
     return payload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -29,7 +36,7 @@ export async function getSession() {
     const session = cookieStore.get('audit_session')?.value;
     if (!session) return null;
     return await decrypt(session) as { user: { id: string, name: string, email: string, role: string } } | null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -58,3 +65,4 @@ export async function clearSession() {
     path: '/',
   });
 }
+

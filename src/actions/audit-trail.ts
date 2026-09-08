@@ -103,24 +103,27 @@ export async function logAuditEvent(params: LogAuditEventParams): Promise<{ succ
       formattedDetails = JSON.stringify(sanitized);
     }
 
-    db.prepare(`
+    await db.execute(
+      `
       INSERT INTO audit_trail (
         id, workspace_id, user_id, user_name, user_email, action,
         entity_type, entity_id, description, details, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      workspaceId,
-      userId,
-      userName,
-      userEmail,
-      action,
-      entityType,
-      entityId,
-      description,
-      formattedDetails,
-      new Date().toISOString()
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `,
+      [
+        id,
+        workspaceId,
+        userId,
+        userName,
+        userEmail,
+        action,
+        entityType,
+        entityId,
+        description,
+        formattedDetails,
+        new Date().toISOString(),
+      ]
     );
 
     return { success: true, id };
@@ -144,87 +147,65 @@ export async function getAuditTrail(
   try {
     await requirePermission("audit_trail.view", workspaceId);
 
-    let query = `
-      SELECT id, workspace_id, user_id, user_name, user_email, action,
-             entity_type, entity_id, description, details, created_at
-      FROM audit_trail
-      WHERE workspace_id = ?
-    `;
-    const params: (string | number)[] = [workspaceId];
+    let whereClause = `WHERE workspace_id = $1`;
+    const params: unknown[] = [workspaceId];
 
     if (filters?.entityType && filters.entityType !== "All") {
-      query += ` AND entity_type = ?`;
       params.push(filters.entityType);
+      whereClause += ` AND entity_type = $${params.length}`;
     }
 
     if (filters?.action && filters.action !== "All") {
-      query += ` AND action = ?`;
       params.push(filters.action);
+      whereClause += ` AND action = $${params.length}`;
     }
 
     if (filters?.userEmail && filters.userEmail !== "All") {
-      query += ` AND user_email = ?`;
       params.push(filters.userEmail);
+      whereClause += ` AND user_email = $${params.length}`;
     }
 
     if (filters?.search && filters.search.trim()) {
-      query += ` AND (description LIKE ? OR user_name LIKE ? OR user_email LIKE ? OR entity_id LIKE ? OR details LIKE ?)`;
       const searchParam = `%${filters.search.trim()}%`;
-      params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
+      params.push(searchParam);
+      const searchIdx = params.length;
+      whereClause += ` AND (description ILIKE $${searchIdx} OR user_name ILIKE $${searchIdx} OR user_email ILIKE $${searchIdx} OR entity_id ILIKE $${searchIdx} OR details ILIKE $${searchIdx})`;
     }
 
     if (filters?.startDate) {
-      query += ` AND created_at >= ?`;
       params.push(filters.startDate);
+      whereClause += ` AND created_at >= $${params.length}`;
     }
 
     if (filters?.endDate) {
-      query += ` AND created_at <= ?`;
       params.push(filters.endDate);
+      whereClause += ` AND created_at <= $${params.length}`;
     }
 
-    query += ` ORDER BY created_at DESC`;
+    // Count total matching records for pagination using the current params
+    const countQuery = `SELECT COUNT(*) as count FROM audit_trail ${whereClause}`;
+    const totalRow = await db.queryOne<{ count: string | number }>(countQuery, [...params]);
+
+    // Data query with ordering and pagination
+    let dataQuery = `
+      SELECT id, workspace_id, user_id, user_name, user_email, action,
+             entity_type, entity_id, description, details, created_at
+      FROM audit_trail
+      ${whereClause}
+      ORDER BY created_at DESC
+    `;
 
     const limit = filters?.limit ? Math.min(1000, Math.max(1, filters.limit)) : 200;
     const offset = filters?.offset ? Math.max(0, filters.offset) : 0;
 
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
+    params.push(limit);
+    dataQuery += ` LIMIT $${params.length}`;
 
-    const records = db.prepare(query).all(...params) as AuditTrailRecord[];
+    params.push(offset);
+    dataQuery += ` OFFSET $${params.length}`;
 
-    // Count total matching records for pagination
-    let countQuery = `SELECT COUNT(*) as count FROM audit_trail WHERE workspace_id = ?`;
-    const countParams: (string | number)[] = [workspaceId];
-
-    if (filters?.entityType && filters.entityType !== "All") {
-      countQuery += ` AND entity_type = ?`;
-      countParams.push(filters.entityType);
-    }
-    if (filters?.action && filters.action !== "All") {
-      countQuery += ` AND action = ?`;
-      countParams.push(filters.action);
-    }
-    if (filters?.userEmail && filters.userEmail !== "All") {
-      countQuery += ` AND user_email = ?`;
-      countParams.push(filters.userEmail);
-    }
-    if (filters?.search && filters.search.trim()) {
-      countQuery += ` AND (description LIKE ? OR user_name LIKE ? OR user_email LIKE ? OR entity_id LIKE ? OR details LIKE ?)`;
-      const searchParam = `%${filters.search.trim()}%`;
-      countParams.push(searchParam, searchParam, searchParam, searchParam, searchParam);
-    }
-    if (filters?.startDate) {
-      countQuery += ` AND created_at >= ?`;
-      countParams.push(filters.startDate);
-    }
-    if (filters?.endDate) {
-      countQuery += ` AND created_at <= ?`;
-      countParams.push(filters.endDate);
-    }
-
-    const totalRow = db.prepare(countQuery).get(...countParams) as { count: number } | undefined;
-    const total = totalRow?.count || records.length;
+    const records = await db.query<AuditTrailRecord>(dataQuery, params);
+    const total = totalRow ? Number(totalRow.count) : records.length;
 
     return { success: true, data: records, total };
   } catch (err: unknown) {
@@ -255,32 +236,42 @@ export async function getAuditTrailStats(
   try {
     await requirePermission("audit_trail.view", workspaceId);
 
-    const totalRow = db
-      .prepare(`SELECT COUNT(*) as count FROM audit_trail WHERE workspace_id = ?`)
-      .get(workspaceId) as { count: number } | undefined;
+    const totalRow = await db.queryOne<{ count: string | number }>(
+      `SELECT COUNT(*) as count FROM audit_trail WHERE workspace_id = $1`,
+      [workspaceId]
+    );
 
     const todayStr = new Date().toISOString().split("T")[0];
-    const todayRow = db
-      .prepare(`SELECT COUNT(*) as count FROM audit_trail WHERE workspace_id = ? AND created_at >= ?`)
-      .get(workspaceId, todayStr) as { count: number } | undefined;
+    const todayRow = await db.queryOne<{ count: string | number }>(
+      `SELECT COUNT(*) as count FROM audit_trail WHERE workspace_id = $1 AND created_at >= $2`,
+      [workspaceId, todayStr]
+    );
 
-    const entityBreakdown = db
-      .prepare(
-        `SELECT entity_type, COUNT(*) as count FROM audit_trail WHERE workspace_id = ? GROUP BY entity_type ORDER BY count DESC`
-      )
-      .all(workspaceId) as { entity_type: string; count: number }[];
+    const rawEntityBreakdown = await db.query<{ entity_type: string; count: string | number }>(
+      `SELECT entity_type, COUNT(*) as count FROM audit_trail WHERE workspace_id = $1 GROUP BY entity_type ORDER BY count DESC`,
+      [workspaceId]
+    );
 
-    const actionBreakdown = db
-      .prepare(
-        `SELECT action, COUNT(*) as count FROM audit_trail WHERE workspace_id = ? GROUP BY action ORDER BY count DESC`
-      )
-      .all(workspaceId) as { action: string; count: number }[];
+    const rawActionBreakdown = await db.query<{ action: string; count: string | number }>(
+      `SELECT action, COUNT(*) as count FROM audit_trail WHERE workspace_id = $1 GROUP BY action ORDER BY count DESC`,
+      [workspaceId]
+    );
+
+    const entityBreakdown = rawEntityBreakdown.map((r) => ({
+      entity_type: r.entity_type,
+      count: Number(r.count),
+    }));
+
+    const actionBreakdown = rawActionBreakdown.map((r) => ({
+      action: r.action,
+      count: Number(r.count),
+    }));
 
     return {
       success: true,
       data: {
-        totalEvents: totalRow?.count || 0,
-        todayEvents: todayRow?.count || 0,
+        totalEvents: Number(totalRow?.count || 0),
+        todayEvents: Number(todayRow?.count || 0),
         entityBreakdown,
         actionBreakdown,
       },
@@ -290,3 +281,4 @@ export async function getAuditTrailStats(
     return { success: false, error: message };
   }
 }
+

@@ -15,13 +15,19 @@ export async function signIn(formData: FormData) {
   }
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as Record<string, unknown>;
+    const user = await db.queryOne<{
+      id: string;
+      name: string;
+      email: string;
+      password: string;
+      role: string;
+    }>('SELECT * FROM users WHERE email = $1', [email]);
     
     if (!user) {
       return { error: 'Invalid credentials' };
     }
 
-    const isValid = await bcrypt.compare(password, user.password as string);
+    const isValid = await bcrypt.compare(password, user.password);
     
     if (!isValid) {
       return { error: 'Invalid credentials' };
@@ -52,7 +58,7 @@ export async function signUp(formData: FormData) {
   }
 
   try {
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = await db.queryOne<{ id: string }>('SELECT id FROM users WHERE email = $1', [email]);
     if (existing) {
       return { error: 'Email is already registered' };
     }
@@ -60,28 +66,29 @@ export async function signUp(formData: FormData) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = crypto.randomUUID();
 
-    const userCountRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-    const isFirstUser = userCountRow.count === 0;
+    const userCountRow = await db.queryOne<{ count: string | number }>('SELECT COUNT(*) as count FROM users');
+    const isFirstUser = Number(userCountRow?.count || 0) === 0;
 
     // Use a transaction to ensure all inserts succeed together
-    const insertTx = db.transaction(() => {
+    await db.transaction(async (tx) => {
       // Global user role defaults to Viewer for everyone. Workspace roles are authoritative.
-      db.prepare('INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)').run(
-        id, name, email, hashedPassword, 'Viewer'
+      await tx.execute(
+        'INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, $5)',
+        [id, name, email, hashedPassword, 'Viewer']
       );
 
       if (isFirstUser) {
         const workspaceId = crypto.randomUUID();
-        db.prepare('INSERT INTO workspaces (id, name) VALUES (?, ?)').run(
-          workspaceId, 'My Workspace'
+        await tx.execute(
+          'INSERT INTO workspaces (id, name) VALUES ($1, $2)',
+          [workspaceId, 'My Workspace']
         );
-        db.prepare('INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES (?, ?, ?)').run(
-          id, workspaceId, 'Owner'
+        await tx.execute(
+          'INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3)',
+          [id, workspaceId, 'Owner']
         );
       }
     });
-    
-    insertTx();
 
     const userObj = {
       id,

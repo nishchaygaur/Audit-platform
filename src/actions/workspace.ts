@@ -3,7 +3,7 @@
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { logAuditEvent } from "./audit-trail";
-import { hasPermission, type Role } from "@/lib/rbac";
+import { type Role } from "@/lib/rbac";
 import { requirePermission, requireRoleManagement } from "@/lib/server-rbac";
 
 export async function getUserWorkspaces() {
@@ -12,15 +12,15 @@ export async function getUserWorkspaces() {
     return [];
   }
 
-  const workspaces = db.prepare(`
+  const workspaces = await db.query<{ id: string; name: string; created_at: string; role: string }>(`
     SELECT w.id, w.name, w.created_at, uw.role
     FROM workspaces w
     JOIN user_workspaces uw ON w.id = uw.workspace_id
-    WHERE uw.user_id = ?
+    WHERE uw.user_id = $1
     ORDER BY w.name ASC
-  `).all(session.user.id);
+  `, [session.user.id]);
 
-  return workspaces as { id: string; name: string; created_at: string; role: string }[];
+  return workspaces;
 }
 
 export async function getWorkspaceMembers(workspaceId: string) {
@@ -30,38 +30,45 @@ export async function getWorkspaceMembers(workspaceId: string) {
   }
 
   // Validate that the user is a member of this workspace
-  const membership = db.prepare(`
+  const membership = await db.queryOne<{ role: string }>(`
     SELECT role FROM user_workspaces 
-    WHERE user_id = ? AND workspace_id = ?
-  `).get(session.user.id, workspaceId);
+    WHERE user_id = $1 AND workspace_id = $2
+  `, [session.user.id, workspaceId]);
 
   if (!membership) {
     return [];
   }
 
-  const members = db.prepare(`
+  const members = await db.query<{ id: string; name: string; email: string; role: string }>(`
     SELECT u.id, u.name, u.email, uw.role
     FROM users u
     JOIN user_workspaces uw ON u.id = uw.user_id
-    WHERE uw.workspace_id = ?
-  `).all(workspaceId);
+    WHERE uw.workspace_id = $1
+  `, [workspaceId]);
 
-  return members as { id: string; name: string; email: string; role: string }[];
+  return members;
 }
 
 export async function addWorkspaceMember(workspaceId: string, email: string, role: string) {
   if (!workspaceId) return { error: "Unauthorized" };
   try {
     await requireRoleManagement(role as Role, workspaceId);
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    return { error: message };
   }
 
-  const user = db.prepare(`SELECT id, name, email FROM users WHERE email = ?`).get(email) as { id: string; name: string; email: string } | undefined;
+  const user = await db.queryOne<{ id: string; name: string; email: string }>(
+    `SELECT id, name, email FROM users WHERE email = $1`,
+    [email]
+  );
   if (!user) return { error: "User not found. Ask them to sign up first." };
 
   try {
-    db.prepare(`INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES (?, ?, ?)`).run(user.id, workspaceId, role);
+    await db.execute(
+      `INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3)`,
+      [user.id, workspaceId, role]
+    );
 
     await logAuditEvent({
       workspaceId,
@@ -73,8 +80,9 @@ export async function addWorkspaceMember(workspaceId: string, email: string, rol
     });
 
     return { success: true };
-  } catch (err: any) {
-    if (err.message && err.message.includes("UNIQUE constraint failed")) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("unique") || message.includes("duplicate") || message.includes("UNIQUE constraint failed")) {
       return { error: "User is already in this workspace" };
     }
     return { error: "Failed to add member" };
@@ -86,23 +94,33 @@ export async function updateWorkspaceMember(workspaceId: string, userId: string,
   let auth;
   try {
     auth = await requireRoleManagement(role as Role, workspaceId);
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    return { error: message };
   }
 
   if (userId === auth.user.id) return { error: "Cannot change your own role" };
 
-  const targetMembership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
+  const targetMembership = await db.queryOne<{ role: string }>(
+    `SELECT role FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
+    [userId, workspaceId]
+  );
   if (!targetMembership) return { error: "User is not in this workspace" };
 
   if (targetMembership.role === "Owner" && auth.role !== "Owner") {
     return { error: "Permission denied: Only Owners can modify Owner roles" };
   }
 
-  const targetUser = db.prepare(`SELECT name, email FROM users WHERE id = ?`).get(userId) as { name: string; email: string } | undefined;
+  const targetUser = await db.queryOne<{ name: string; email: string }>(
+    `SELECT name, email FROM users WHERE id = $1`,
+    [userId]
+  );
 
   try {
-    db.prepare(`UPDATE user_workspaces SET role = ? WHERE user_id = ? AND workspace_id = ?`).run(role, userId, workspaceId);
+    await db.execute(
+      `UPDATE user_workspaces SET role = $1 WHERE user_id = $2 AND workspace_id = $3`,
+      [role, userId, workspaceId]
+    );
 
     await logAuditEvent({
       workspaceId,
@@ -114,7 +132,7 @@ export async function updateWorkspaceMember(workspaceId: string, userId: string,
     });
 
     return { success: true };
-  } catch (err) {
+  } catch {
     return { error: "Failed to update member" };
   }
 }
@@ -124,23 +142,33 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
   let auth;
   try {
     auth = await requirePermission("workspace.manage", workspaceId);
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    return { error: message };
   }
 
   if (userId === auth.user.id) return { error: "Cannot remove yourself" };
 
-  const targetMembership = db.prepare(`SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).get(userId, workspaceId) as { role: string } | undefined;
+  const targetMembership = await db.queryOne<{ role: string }>(
+    `SELECT role FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
+    [userId, workspaceId]
+  );
   if (!targetMembership) return { error: "User is not in this workspace" };
 
   if (targetMembership.role === "Owner" && auth.role !== "Owner") {
     return { error: "Permission denied: Only Owners can remove Owners" };
   }
 
-  const targetUser = db.prepare(`SELECT name, email FROM users WHERE id = ?`).get(userId) as { name: string; email: string } | undefined;
+  const targetUser = await db.queryOne<{ name: string; email: string }>(
+    `SELECT name, email FROM users WHERE id = $1`,
+    [userId]
+  );
 
   try {
-    db.prepare(`DELETE FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).run(userId, workspaceId);
+    await db.execute(
+      `DELETE FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
+      [userId, workspaceId]
+    );
 
     await logAuditEvent({
       workspaceId,
@@ -151,7 +179,7 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
     });
 
     return { success: true };
-  } catch (err) {
+  } catch {
     return { error: "Failed to remove member" };
   }
 }

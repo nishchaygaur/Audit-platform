@@ -88,9 +88,10 @@ export async function getFindings(workspaceId: string, auditId?: string) {
     await requirePermission("findings.view", workspaceId);
 
     if (auditId) {
-      const audit = db
-        .prepare("SELECT id FROM audits WHERE id = ? AND workspace_id = ?")
-        .get(auditId, workspaceId);
+      const audit = await db.queryOne<{ id: string }>(
+        "SELECT id FROM audits WHERE id = $1 AND workspace_id = $2",
+        [auditId, workspaceId]
+      );
       if (!audit) {
         return { success: false, error: "Audit not found in this workspace" };
       }
@@ -100,17 +101,17 @@ export async function getFindings(workspaceId: string, auditId?: string) {
       SELECT f.*, a.name as audit_name 
       FROM findings f 
       JOIN audits a ON f.audit_id = a.id 
-      WHERE f.workspace_id = ? AND a.workspace_id = ?
+      WHERE f.workspace_id = $1 AND a.workspace_id = $2
     `;
     const params: string[] = [workspaceId, workspaceId];
 
     if (auditId) {
-      query += ` AND f.audit_id = ?`;
       params.push(auditId);
+      query += ` AND f.audit_id = $${params.length}`;
     }
 
     query += ` ORDER BY f.created_at DESC`;
-    const findings = db.prepare(query).all(...params);
+    const findings = await db.query<FindingRecord>(query, params);
 
     return { success: true, data: findings };
   } catch (err: unknown) {
@@ -135,16 +136,16 @@ export async function getFinding(
       SELECT f.*, a.name as audit_name 
       FROM findings f 
       JOIN audits a ON f.audit_id = a.id 
-      WHERE f.id = ? AND f.workspace_id = ? AND a.workspace_id = ?
+      WHERE f.id = $1 AND f.workspace_id = $2 AND a.workspace_id = $3
     `;
     const params: string[] = [findingId, workspaceId, workspaceId];
 
     if (auditId) {
-      query += ` AND f.audit_id = ?`;
       params.push(auditId);
+      query += ` AND f.audit_id = $${params.length}`;
     }
 
-    const finding = db.prepare(query).get(...params);
+    const finding = await db.queryOne<FindingRecord>(query, params);
     if (!finding) {
       return { success: false, error: "Finding not found" };
     }
@@ -173,9 +174,10 @@ export async function createFinding(workspaceId: string, input: CreateFindingInp
     }
 
     // Verify parent audit belongs to this workspace
-    const audit = db
-      .prepare("SELECT id, framework FROM audits WHERE id = ? AND workspace_id = ?")
-      .get(input.auditId, workspaceId) as { id: string; framework: string } | undefined;
+    const audit = await db.queryOne<{ id: string; framework: string }>(
+      "SELECT id, framework FROM audits WHERE id = $1 AND workspace_id = $2",
+      [input.auditId, workspaceId]
+    );
 
     if (!audit) {
       return { success: false, error: "Audit not found in this workspace" };
@@ -200,9 +202,10 @@ export async function createFinding(workspaceId: string, input: CreateFindingInp
 
     // Cross-workspace evidence reference check
     if (input.evidence && input.evidence.trim()) {
-      const referencedEvidence = db
-        .prepare("SELECT workspace_id FROM evidence WHERE id = ? OR reference = ?")
-        .get(input.evidence.trim(), input.evidence.trim()) as { workspace_id: string } | undefined;
+      const referencedEvidence = await db.queryOne<{ workspace_id: string }>(
+        "SELECT workspace_id FROM evidence WHERE id = $1 OR reference = $2",
+        [input.evidence.trim(), input.evidence.trim()]
+      );
 
       if (referencedEvidence && referencedEvidence.workspace_id !== workspaceId) {
         return {
@@ -227,37 +230,44 @@ export async function createFinding(workspaceId: string, input: CreateFindingInp
     const evidence = input.evidence || "";
     const auditor = input.auditor || "";
 
-    db.prepare(`
+    await db.execute(
+      `
       INSERT INTO findings (
         id, workspace_id, audit_id, reference, title, description,
         framework, control, severity, owner, identified_date, due_date,
         status, recommendation, evidence, auditor
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      workspaceId,
-      input.auditId,
-      reference,
-      input.title.trim(),
-      input.description || "",
-      framework,
-      control,
-      input.severity,
-      owner,
-      identifiedDate,
-      dueDate,
-      normalizedStatus,
-      recommendation,
-      evidence,
-      auditor
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `,
+      [
+        id,
+        workspaceId,
+        input.auditId,
+        reference,
+        input.title.trim(),
+        input.description || "",
+        framework,
+        control,
+        input.severity,
+        owner,
+        identifiedDate,
+        dueDate,
+        normalizedStatus,
+        recommendation,
+        evidence,
+        auditor,
+      ]
     );
 
     // Sync parent audit finding count
-    db.prepare(
-      "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = ?) WHERE id = ?"
-    ).run(input.auditId, input.auditId);
+    await db.execute(
+      "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = $1) WHERE id = $2",
+      [input.auditId, input.auditId]
+    );
 
-    const createdRecord = db.prepare("SELECT * FROM findings WHERE id = ?").get(id);
+    const createdRecord = await db.queryOne<FindingRecord>(
+      "SELECT * FROM findings WHERE id = $1",
+      [id]
+    );
 
     await logAuditEvent({
       workspaceId,
@@ -293,17 +303,22 @@ export async function updateFinding(
       SELECT f.* 
       FROM findings f 
       JOIN audits a ON f.audit_id = a.id 
-      WHERE f.id = ? AND f.workspace_id = ? AND a.workspace_id = ?
+      WHERE f.id = $1 AND f.workspace_id = $2 AND a.workspace_id = $3
     `;
     const checkParams: string[] = [findingId, workspaceId, workspaceId];
     if (auditId) {
-      checkQuery += ` AND f.audit_id = ?`;
       checkParams.push(auditId);
+      checkQuery += ` AND f.audit_id = $${checkParams.length}`;
     }
 
-    const existing = db.prepare(checkQuery).get(...checkParams) as
-      | { id: string; title: string; reference: string; status: string; severity: string; audit_id: string }
-      | undefined;
+    const existing = await db.queryOne<{
+      id: string;
+      title: string;
+      reference: string;
+      status: string;
+      severity: string;
+      audit_id: string;
+    }>(checkQuery, checkParams);
 
     if (!existing) {
       return { success: false, error: "Finding not found" };
@@ -311,9 +326,10 @@ export async function updateFinding(
 
     // If updating auditId, verify target audit belongs to this workspace
     if (updates.auditId && updates.auditId !== existing.audit_id) {
-      const targetAudit = db
-        .prepare("SELECT id FROM audits WHERE id = ? AND workspace_id = ?")
-        .get(updates.auditId, workspaceId);
+      const targetAudit = await db.queryOne<{ id: string }>(
+        "SELECT id FROM audits WHERE id = $1 AND workspace_id = $2",
+        [updates.auditId, workspaceId]
+      );
       if (!targetAudit) {
         return { success: false, error: "Target audit not found in this workspace" };
       }
@@ -343,9 +359,10 @@ export async function updateFinding(
 
     // Cross-workspace evidence reference check
     if (updates.evidence && updates.evidence.trim()) {
-      const referencedEvidence = db
-        .prepare("SELECT workspace_id FROM evidence WHERE id = ? OR reference = ?")
-        .get(updates.evidence.trim(), updates.evidence.trim()) as { workspace_id: string } | undefined;
+      const referencedEvidence = await db.queryOne<{ workspace_id: string }>(
+        "SELECT workspace_id FROM evidence WHERE id = $1 OR reference = $2",
+        [updates.evidence.trim(), updates.evidence.trim()]
+      );
 
       if (referencedEvidence && referencedEvidence.workspace_id !== workspaceId) {
         return {
@@ -359,81 +376,91 @@ export async function updateFinding(
     const values: (string | number)[] = [];
 
     if (updates.title !== undefined) {
-      fields.push("title = ?");
       values.push(updates.title.trim());
+      fields.push(`title = $${values.length}`);
     }
     if (updates.description !== undefined) {
-      fields.push("description = ?");
       values.push(updates.description);
+      fields.push(`description = $${values.length}`);
     }
     if (updates.auditId !== undefined) {
-      fields.push("audit_id = ?");
       values.push(updates.auditId);
+      fields.push(`audit_id = $${values.length}`);
     }
     if (updates.reference !== undefined) {
-      fields.push("reference = ?");
       values.push(updates.reference);
+      fields.push(`reference = $${values.length}`);
     }
     if (updates.framework !== undefined) {
-      fields.push("framework = ?");
       values.push(updates.framework);
+      fields.push(`framework = $${values.length}`);
     }
     if (updates.control !== undefined) {
-      fields.push("control = ?");
       values.push(updates.control);
+      fields.push(`control = $${values.length}`);
     }
     if (updates.severity !== undefined) {
-      fields.push("severity = ?");
       values.push(updates.severity);
+      fields.push(`severity = $${values.length}`);
     }
     if (updates.owner !== undefined) {
-      fields.push("owner = ?");
       values.push(updates.owner);
+      fields.push(`owner = $${values.length}`);
     }
     if (updates.identifiedDate !== undefined) {
-      fields.push("identified_date = ?");
       values.push(updates.identifiedDate);
+      fields.push(`identified_date = $${values.length}`);
     }
     if (updates.dueDate !== undefined) {
-      fields.push("due_date = ?");
       values.push(updates.dueDate);
+      fields.push(`due_date = $${values.length}`);
     }
     if (normalizedStatus !== undefined) {
-      fields.push("status = ?");
       values.push(normalizedStatus);
+      fields.push(`status = $${values.length}`);
     }
     if (updates.recommendation !== undefined) {
-      fields.push("recommendation = ?");
       values.push(updates.recommendation);
+      fields.push(`recommendation = $${values.length}`);
     }
     if (updates.evidence !== undefined) {
-      fields.push("evidence = ?");
       values.push(updates.evidence);
+      fields.push(`evidence = $${values.length}`);
     }
     if (updates.auditor !== undefined) {
-      fields.push("auditor = ?");
       values.push(updates.auditor);
+      fields.push(`auditor = $${values.length}`);
     }
 
     if (fields.length > 0) {
-      values.push(findingId, workspaceId);
-      db.prepare(`UPDATE findings SET ${fields.join(", ")} WHERE id = ? AND workspace_id = ?`).run(
-        ...values
+      values.push(findingId);
+      const findingIdIdx = values.length;
+      values.push(workspaceId);
+      const workspaceIdIdx = values.length;
+
+      await db.execute(
+        `UPDATE findings SET ${fields.join(", ")} WHERE id = $${findingIdIdx} AND workspace_id = $${workspaceIdIdx}`,
+        values
       );
     }
 
     // Sync audit counters
-    db.prepare(
-      "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = ?) WHERE id = ?"
-    ).run(existing.audit_id, existing.audit_id);
+    await db.execute(
+      "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = $1) WHERE id = $2",
+      [existing.audit_id, existing.audit_id]
+    );
 
     if (updates.auditId && updates.auditId !== existing.audit_id) {
-      db.prepare(
-        "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = ?) WHERE id = ?"
-      ).run(updates.auditId, updates.auditId);
+      await db.execute(
+        "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = $1) WHERE id = $2",
+        [updates.auditId, updates.auditId]
+      );
     }
 
-    const updated = db.prepare("SELECT * FROM findings WHERE id = ?").get(findingId);
+    const updated = await db.queryOne<FindingRecord>(
+      "SELECT * FROM findings WHERE id = $1",
+      [findingId]
+    );
 
     let desc = `Updated finding "${existing.title}" (${existing.reference})`;
     if (normalizedStatus && normalizedStatus !== existing.status) {
@@ -472,31 +499,35 @@ export async function deleteFinding(
       SELECT f.* 
       FROM findings f 
       JOIN audits a ON f.audit_id = a.id 
-      WHERE f.id = ? AND f.workspace_id = ? AND a.workspace_id = ?
+      WHERE f.id = $1 AND f.workspace_id = $2 AND a.workspace_id = $3
     `;
     const checkParams: string[] = [findingId, workspaceId, workspaceId];
     if (auditId) {
-      checkQuery += ` AND f.audit_id = ?`;
       checkParams.push(auditId);
+      checkQuery += ` AND f.audit_id = $${checkParams.length}`;
     }
 
-    const existing = db.prepare(checkQuery).get(...checkParams) as
-      | { id: string; title: string; reference: string; audit_id: string }
-      | undefined;
+    const existing = await db.queryOne<{
+      id: string;
+      title: string;
+      reference: string;
+      audit_id: string;
+    }>(checkQuery, checkParams);
 
     if (!existing) {
       return { success: false, error: "Finding not found" };
     }
 
-    db.prepare("DELETE FROM findings WHERE id = ? AND workspace_id = ?").run(
-      findingId,
-      workspaceId
+    await db.execute(
+      "DELETE FROM findings WHERE id = $1 AND workspace_id = $2",
+      [findingId, workspaceId]
     );
 
     // Sync parent audit counter
-    db.prepare(
-      "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = ?) WHERE id = ?"
-    ).run(existing.audit_id, existing.audit_id);
+    await db.execute(
+      "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = $1) WHERE id = $2",
+      [existing.audit_id, existing.audit_id]
+    );
 
     await logAuditEvent({
       workspaceId,
@@ -512,3 +543,4 @@ export async function deleteFinding(
     return { success: false, error: message };
   }
 }
+
