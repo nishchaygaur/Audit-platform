@@ -2,6 +2,7 @@
 
 import db from "@/lib/db";
 import { requirePermission } from "@/lib/server-rbac";
+import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
 
 export type AuditLifecycleStatus =
@@ -170,6 +171,15 @@ export async function createAudit(workspaceId: string, data: CreateAuditInput) {
       risks,
     };
 
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Audit",
+      entityId: id,
+      description: `Created audit "${data.name.trim()}" (${framework})`,
+      details: { lead, status, framework, progress },
+    });
+
     return { success: true, data: createdAudit };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to create audit";
@@ -190,8 +200,8 @@ export async function updateAudit(
     await requirePermission("audits.update", workspaceId);
 
     const existing = db
-      .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId);
+      .prepare(`SELECT * FROM audits WHERE id = ? AND workspace_id = ?`)
+      .get(auditId, workspaceId) as { id: string; name: string; status: string } | undefined;
 
     if (!existing) {
       return { success: false, error: "Audit not found" };
@@ -265,6 +275,20 @@ export async function updateAudit(
       `UPDATE audits SET ${setParts.join(", ")} WHERE id = ? AND workspace_id = ?`
     ).run(...values);
 
+    let desc = `Updated audit "${existing.name}"`;
+    if (updates.status && updates.status !== existing.status) {
+      desc = `Changed audit "${existing.name}" status from ${existing.status} to ${updates.status}`;
+    }
+
+    await logAuditEvent({
+      workspaceId,
+      action: updates.status && updates.status !== existing.status ? "STATUS_CHANGE" : "UPDATE",
+      entityType: "Audit",
+      entityId: auditId,
+      description: desc,
+      details: updates,
+    });
+
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update audit";
@@ -281,8 +305,8 @@ export async function deleteAudit(workspaceId: string, auditId: string) {
     await requirePermission("audits.delete", workspaceId);
 
     const existing = db
-      .prepare(`SELECT id FROM audits WHERE id = ? AND workspace_id = ?`)
-      .get(auditId, workspaceId);
+      .prepare(`SELECT id, name FROM audits WHERE id = ? AND workspace_id = ?`)
+      .get(auditId, workspaceId) as { id: string; name: string } | undefined;
 
     if (!existing) {
       return { success: false, error: "Audit not found" };
@@ -292,6 +316,15 @@ export async function deleteAudit(workspaceId: string, auditId: string) {
       auditId,
       workspaceId
     );
+
+    await logAuditEvent({
+      workspaceId,
+      action: "DELETE",
+      entityType: "Audit",
+      entityId: auditId,
+      description: `Deleted audit "${existing.name}" (${auditId})`,
+    });
+
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to delete audit";

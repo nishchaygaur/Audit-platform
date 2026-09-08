@@ -3,13 +3,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   AlertTriangle,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
   Clock3,
   Eye,
-  Filter,
   Plus,
   Search,
   ShieldAlert,
@@ -119,7 +117,7 @@ export default function RiskManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentWorkspace?.id]);
+  }, [currentWorkspace]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -284,7 +282,7 @@ export default function RiskManagementPage() {
           <SummaryCard
             title="Total Risks"
             value={risks.length}
-            subtitle="Across workspace"
+            subtitle={`${open} active / open`}
             icon={<ShieldAlert className="h-5 w-5" />}
           />
 

@@ -2,6 +2,7 @@
 
 import db from "@/lib/db";
 import { requirePermission } from "@/lib/server-rbac";
+import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
 
 export type RiskLevel = "Critical" | "High" | "Medium" | "Low";
@@ -136,7 +137,7 @@ export async function getRisks(workspaceId: string, auditId?: string) {
       LEFT JOIN audits a ON r.audit_id = a.id
       WHERE r.workspace_id = ?
     `;
-    const params: any[] = [workspaceId];
+    const params: (string | number)[] = [workspaceId];
 
     if (auditId) {
       query += ` AND r.audit_id = ?`;
@@ -147,10 +148,11 @@ export async function getRisks(workspaceId: string, auditId?: string) {
 
     const risks = db.prepare(query).all(...params) as RiskRecord[];
     return { success: true, data: risks };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to retrieve risks";
     return {
       success: false,
-      error: err?.message || "Failed to retrieve risks",
+      error: msg,
     };
   }
 }
@@ -177,10 +179,11 @@ export async function getRisk(workspaceId: string, riskId: string) {
     }
 
     return { success: true, data: risk };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to retrieve risk";
     return {
       success: false,
-      error: err?.message || "Failed to retrieve risk",
+      error: msg,
     };
   }
 }
@@ -311,11 +314,21 @@ export async function createRisk(workspaceId: string, data: CreateRiskInput) {
       created_at: new Date().toISOString(),
     };
 
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Risk",
+      entityId: id,
+      description: `Created risk "${title}" (Score: ${score}, Level: ${level})`,
+      details: { score, level, treatment, status, category, owner },
+    });
+
     return { success: true, data: createdRisk };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to create risk";
     return {
       success: false,
-      error: err?.message || "Failed to create risk",
+      error: msg,
     };
   }
 }
@@ -418,6 +431,20 @@ export async function updateRisk(
     }
     updateAuditRiskCount(auditId, workspaceId);
 
+    let desc = `Updated risk "${title}"`;
+    if (updates.status && updates.status !== existing.status) {
+      desc = `Changed risk "${title}" status from ${existing.status} to ${updates.status}`;
+    }
+
+    await logAuditEvent({
+      workspaceId,
+      action: updates.status && updates.status !== existing.status ? "STATUS_CHANGE" : "UPDATE",
+      entityType: "Risk",
+      entityId: riskId,
+      description: desc,
+      details: updates,
+    });
+
     return {
       success: true,
       data: {
@@ -445,10 +472,11 @@ export async function updateRisk(
         created_at: existing.created_at,
       },
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to update risk";
     return {
       success: false,
-      error: err?.message || "Failed to update risk",
+      error: msg,
     };
   }
 }
@@ -462,8 +490,8 @@ export async function deleteRisk(workspaceId: string, riskId: string) {
     await requirePermission("risks.delete", workspaceId);
 
     const existing = db
-      .prepare(`SELECT audit_id FROM risks WHERE id = ? AND workspace_id = ?`)
-      .get(riskId, workspaceId) as { audit_id: string } | undefined;
+      .prepare(`SELECT audit_id, title FROM risks WHERE id = ? AND workspace_id = ?`)
+      .get(riskId, workspaceId) as { audit_id: string; title: string } | undefined;
 
     if (!existing) {
       return { success: false, error: "Risk not found" };
@@ -473,11 +501,20 @@ export async function deleteRisk(workspaceId: string, riskId: string) {
 
     updateAuditRiskCount(existing.audit_id, workspaceId);
 
+    await logAuditEvent({
+      workspaceId,
+      action: "DELETE",
+      entityType: "Risk",
+      entityId: riskId,
+      description: `Deleted risk "${existing.title}" (${riskId})`,
+    });
+
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to delete risk";
     return {
       success: false,
-      error: err?.message || "Failed to delete risk",
+      error: msg,
     };
   }
 }

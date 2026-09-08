@@ -23,10 +23,12 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   getFinding,
   updateFinding,
+} from "@/actions/findings";
+import {
   type FindingSeverity,
   type FindingStatus,
   VALID_FINDING_STATUSES,
-} from "@/actions/findings";
+} from "@/lib/findings-types";
 
 type FindingDbRow = {
   id: string;

@@ -2425,6 +2425,7 @@ function RisksPanel({ audit }: { audit: Audit }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRisks();
   }, [currentWorkspace?.id, audit.id]);
 

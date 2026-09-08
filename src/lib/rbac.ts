@@ -60,6 +60,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "findings.view", "findings.create", "findings.update",
     "risks.view", "risks.create", "risks.update",
     "reports.view", "reports.generate",
+    "audit_trail.view",
   ],
   Reviewer: [
     "audits.view", 
@@ -69,6 +70,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "findings.view", "findings.update",
     "risks.view", "risks.update",
     "reports.view", "reports.generate",
+    "audit_trail.view",
   ],
   Viewer: [
     "users.view",

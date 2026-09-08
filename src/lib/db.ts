@@ -124,6 +124,22 @@ db.exec(`
     FOREIGN KEY (audit_id) REFERENCES audits(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS audit_trail (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    user_email TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    details TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_audits_workspace ON audits(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_findings_workspace ON findings(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_findings_audit ON findings(audit_id);
@@ -131,6 +147,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_risks_audit ON risks(audit_id);
   CREATE INDEX IF NOT EXISTS idx_evidence_workspace ON evidence(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_evidence_audit ON evidence(audit_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_trail_workspace ON audit_trail(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_trail_created_at ON audit_trail(created_at);
+  CREATE INDEX IF NOT EXISTS idx_audit_trail_entity ON audit_trail(entity_type, entity_id);
 `);
 
 // Safe migrations for evidence columns

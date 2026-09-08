@@ -6,12 +6,14 @@ import {
   createFinding,
   updateFinding,
   deleteFinding as apiDeleteFinding,
+  type FindingRecord,
+} from "@/actions/findings";
+import {
   type FindingSeverity,
   type FindingStatus,
-  type FindingRecord,
   VALID_FINDING_SEVERITIES,
   VALID_FINDING_STATUSES,
-} from "@/actions/findings";
+} from "@/lib/findings-types";
 import { getAudits } from "@/actions/audits";
 import type { ReactNode } from "react";
 

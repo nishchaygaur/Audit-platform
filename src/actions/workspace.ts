@@ -2,6 +2,9 @@
 
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { logAuditEvent } from "./audit-trail";
+import { hasPermission, type Role } from "@/lib/rbac";
+import { requirePermission, requireRoleManagement } from "@/lib/server-rbac";
 
 export async function getUserWorkspaces() {
   const session = await getSession();
@@ -45,8 +48,6 @@ export async function getWorkspaceMembers(workspaceId: string) {
 
   return members as { id: string; name: string; email: string; role: string }[];
 }
-import { hasPermission, type Role } from "@/lib/rbac";
-import { requirePermission, requireRoleManagement } from "@/lib/server-rbac";
 
 export async function addWorkspaceMember(workspaceId: string, email: string, role: string) {
   if (!workspaceId) return { error: "Unauthorized" };
@@ -56,11 +57,21 @@ export async function addWorkspaceMember(workspaceId: string, email: string, rol
     return { error: err.message };
   }
 
-  const user = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email) as { id: string } | undefined;
+  const user = db.prepare(`SELECT id, name, email FROM users WHERE email = ?`).get(email) as { id: string; name: string; email: string } | undefined;
   if (!user) return { error: "User not found. Ask them to sign up first." };
 
   try {
     db.prepare(`INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES (?, ?, ?)`).run(user.id, workspaceId, role);
+
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Member",
+      entityId: user.id,
+      description: `Added workspace member ${user.name} (${user.email}) with role ${role}`,
+      details: { memberId: user.id, email: user.email, role },
+    });
+
     return { success: true };
   } catch (err: any) {
     if (err.message && err.message.includes("UNIQUE constraint failed")) {
@@ -88,8 +99,20 @@ export async function updateWorkspaceMember(workspaceId: string, userId: string,
     return { error: "Permission denied: Only Owners can modify Owner roles" };
   }
 
+  const targetUser = db.prepare(`SELECT name, email FROM users WHERE id = ?`).get(userId) as { name: string; email: string } | undefined;
+
   try {
     db.prepare(`UPDATE user_workspaces SET role = ? WHERE user_id = ? AND workspace_id = ?`).run(role, userId, workspaceId);
+
+    await logAuditEvent({
+      workspaceId,
+      action: "STATUS_CHANGE",
+      entityType: "Member",
+      entityId: userId,
+      description: `Changed role of member ${targetUser?.name || userId} from ${targetMembership.role} to ${role}`,
+      details: { memberId: userId, oldRole: targetMembership.role, newRole: role },
+    });
+
     return { success: true };
   } catch (err) {
     return { error: "Failed to update member" };
@@ -114,8 +137,19 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
     return { error: "Permission denied: Only Owners can remove Owners" };
   }
 
+  const targetUser = db.prepare(`SELECT name, email FROM users WHERE id = ?`).get(userId) as { name: string; email: string } | undefined;
+
   try {
     db.prepare(`DELETE FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`).run(userId, workspaceId);
+
+    await logAuditEvent({
+      workspaceId,
+      action: "DELETE",
+      entityType: "Member",
+      entityId: userId,
+      description: `Removed member ${targetUser?.name || userId} (${targetUser?.email || ""}) from workspace`,
+    });
+
     return { success: true };
   } catch (err) {
     return { error: "Failed to remove member" };

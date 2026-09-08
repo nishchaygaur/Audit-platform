@@ -7,11 +7,13 @@ import {
   createFinding,
   updateFinding,
   deleteFinding as apiDeleteFinding,
+} from "@/actions/findings";
+import {
   type FindingSeverity,
   type FindingStatus,
   VALID_FINDING_SEVERITIES,
   VALID_FINDING_STATUSES,
-} from "@/actions/findings";
+} from "@/lib/findings-types";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 

@@ -33,6 +33,7 @@ import {
   Sliders,
   X,
   Sparkles,
+  History,
 } from "lucide-react";
 
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -98,6 +99,11 @@ const mainNavigation: NavItem[] = [
     name: "Reports",
     icon: BarChart3,
     href: "/reports",
+  },
+  {
+    name: "Audit Trail",
+    icon: History,
+    href: "/audit-trail",
   },
   {
     name: "Tasks",

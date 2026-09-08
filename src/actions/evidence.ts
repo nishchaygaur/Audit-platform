@@ -2,6 +2,7 @@
 
 import db from "@/lib/db";
 import { requirePermission } from "@/lib/server-rbac";
+import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
 
 export type EvidenceStatus =
@@ -281,6 +282,15 @@ export async function createEvidence(
       created_at: new Date().toISOString(),
     };
 
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Evidence",
+      entityId: id,
+      description: `Uploaded evidence "${name}" (${reference})`,
+      details: { control, framework, status, uploadedBy },
+    });
+
     return { success: true, data: record };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to create evidence";
@@ -314,21 +324,21 @@ export async function updateEvidence(
     if (auditId) {
       existing = db
         .prepare(`
-          SELECT e.id, e.audit_id, e.workspace_id
+          SELECT e.id, e.name, e.reference, e.status, e.audit_id, e.workspace_id
           FROM evidence e
           JOIN audits a ON e.audit_id = a.id
           WHERE e.id = ? AND e.audit_id = ? AND a.workspace_id = ?
         `)
-        .get(evidenceId, auditId, workspaceId) as { id: string; audit_id: string; workspace_id: string } | undefined;
+        .get(evidenceId, auditId, workspaceId) as { id: string; name: string; reference: string; status: string; audit_id: string; workspace_id: string } | undefined;
     } else {
       existing = db
         .prepare(`
-          SELECT e.id, e.audit_id, e.workspace_id
+          SELECT e.id, e.name, e.reference, e.status, e.audit_id, e.workspace_id
           FROM evidence e
           JOIN audits a ON e.audit_id = a.id
           WHERE e.id = ? AND a.workspace_id = ?
         `)
-        .get(evidenceId, workspaceId) as { id: string; audit_id: string; workspace_id: string } | undefined;
+        .get(evidenceId, workspaceId) as { id: string; name: string; reference: string; status: string; audit_id: string; workspace_id: string } | undefined;
     }
 
     if (!existing) {
@@ -401,6 +411,20 @@ export async function updateEvidence(
       WHERE id = ? AND audit_id = ? AND workspace_id = ?
     `).run(...values);
 
+    let desc = `Updated evidence "${existing.name}" (${existing.reference})`;
+    if (updates.status && updates.status !== existing.status) {
+      desc = `Changed evidence "${existing.name}" status from ${existing.status} to ${updates.status}`;
+    }
+
+    await logAuditEvent({
+      workspaceId,
+      action: updates.status && updates.status !== existing.status ? "STATUS_CHANGE" : "UPDATE",
+      entityType: "Evidence",
+      entityId: evidenceId,
+      description: desc,
+      details: updates,
+    });
+
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update evidence";
@@ -431,21 +455,21 @@ export async function deleteEvidence(
     if (auditId) {
       existing = db
         .prepare(`
-          SELECT e.id, e.audit_id
+          SELECT e.id, e.name, e.reference, e.audit_id
           FROM evidence e
           JOIN audits a ON e.audit_id = a.id
           WHERE e.id = ? AND e.audit_id = ? AND a.workspace_id = ?
         `)
-        .get(evidenceId, auditId, workspaceId) as { id: string; audit_id: string } | undefined;
+        .get(evidenceId, auditId, workspaceId) as { id: string; name: string; reference: string; audit_id: string } | undefined;
     } else {
       existing = db
         .prepare(`
-          SELECT e.id, e.audit_id
+          SELECT e.id, e.name, e.reference, e.audit_id
           FROM evidence e
           JOIN audits a ON e.audit_id = a.id
           WHERE e.id = ? AND a.workspace_id = ?
         `)
-        .get(evidenceId, workspaceId) as { id: string; audit_id: string } | undefined;
+        .get(evidenceId, workspaceId) as { id: string; name: string; reference: string; audit_id: string } | undefined;
     }
 
     if (!existing) {
@@ -463,6 +487,14 @@ export async function deleteEvidence(
       SET evidence = (SELECT COUNT(*) FROM evidence WHERE audit_id = ?)
       WHERE id = ?
     `).run(existing.audit_id, existing.audit_id);
+
+    await logAuditEvent({
+      workspaceId,
+      action: "DELETE",
+      entityType: "Evidence",
+      entityId: evidenceId,
+      description: `Deleted evidence "${existing.name}" (${existing.reference})`,
+    });
 
     return { success: true };
   } catch (err: unknown) {

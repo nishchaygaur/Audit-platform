@@ -150,14 +150,16 @@ export default function RisksPage() {
       } else {
         setError(res.error || "Failed to load risks");
       }
-    } catch (err: any) {
-      setError(err?.message || "Failed to fetch risks");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch risks";
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [currentWorkspace?.id, auditId]);
+  }, [currentWorkspace, auditId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRisks();
   }, [loadRisks]);
 

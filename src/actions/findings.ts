@@ -2,37 +2,16 @@
 
 import db from "@/lib/db";
 import { requirePermission } from "@/lib/server-rbac";
+import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
+import {
+  type FindingSeverity,
+  type FindingStatus,
+  VALID_FINDING_SEVERITIES,
+  VALID_FINDING_STATUSES,
+} from "@/lib/findings-types";
 
-export type FindingSeverity =
-  | "Critical"
-  | "High"
-  | "Medium"
-  | "Low"
-  | "Informational";
-
-export type FindingStatus =
-  | "Open"
-  | "In Progress"
-  | "Remediated"
-  | "Accepted Risk"
-  | "Closed";
-
-export const VALID_FINDING_SEVERITIES: readonly FindingSeverity[] = [
-  "Critical",
-  "High",
-  "Medium",
-  "Low",
-  "Informational",
-] as const;
-
-export const VALID_FINDING_STATUSES: readonly FindingStatus[] = [
-  "Open",
-  "In Progress",
-  "Remediated",
-  "Accepted Risk",
-  "Closed",
-] as const;
+export type { FindingSeverity, FindingStatus };
 
 export type FindingRecord = {
   id: string;
@@ -280,6 +259,15 @@ export async function createFinding(workspaceId: string, input: CreateFindingInp
 
     const createdRecord = db.prepare("SELECT * FROM findings WHERE id = ?").get(id);
 
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Finding",
+      entityId: id,
+      description: `Created finding "${input.title.trim()}" (${reference}) - Severity: ${input.severity}`,
+      details: { severity: input.severity, status: normalizedStatus, control, framework, owner },
+    });
+
     return { success: true, data: createdRecord };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to create finding";
@@ -314,7 +302,7 @@ export async function updateFinding(
     }
 
     const existing = db.prepare(checkQuery).get(...checkParams) as
-      | { id: string; audit_id: string }
+      | { id: string; title: string; reference: string; status: string; severity: string; audit_id: string }
       | undefined;
 
     if (!existing) {
@@ -446,6 +434,21 @@ export async function updateFinding(
     }
 
     const updated = db.prepare("SELECT * FROM findings WHERE id = ?").get(findingId);
+
+    let desc = `Updated finding "${existing.title}" (${existing.reference})`;
+    if (normalizedStatus && normalizedStatus !== existing.status) {
+      desc = `Changed finding "${existing.reference}" status from ${existing.status} to ${normalizedStatus}`;
+    }
+
+    await logAuditEvent({
+      workspaceId,
+      action: normalizedStatus && normalizedStatus !== existing.status ? "STATUS_CHANGE" : "UPDATE",
+      entityType: "Finding",
+      entityId: findingId,
+      description: desc,
+      details: updates,
+    });
+
     return { success: true, data: updated };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update finding";
@@ -478,7 +481,7 @@ export async function deleteFinding(
     }
 
     const existing = db.prepare(checkQuery).get(...checkParams) as
-      | { id: string; audit_id: string }
+      | { id: string; title: string; reference: string; audit_id: string }
       | undefined;
 
     if (!existing) {
@@ -494,6 +497,14 @@ export async function deleteFinding(
     db.prepare(
       "UPDATE audits SET findings = (SELECT COUNT(*) FROM findings WHERE audit_id = ?) WHERE id = ?"
     ).run(existing.audit_id, existing.audit_id);
+
+    await logAuditEvent({
+      workspaceId,
+      action: "DELETE",
+      entityType: "Finding",
+      entityId: findingId,
+      description: `Deleted finding "${existing.title}" (${existing.reference})`,
+    });
 
     return { success: true };
   } catch (err: unknown) {
