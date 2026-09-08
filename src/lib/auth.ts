@@ -28,7 +28,7 @@ export async function getSession() {
     const cookieStore = await cookies();
     const session = cookieStore.get('audit_session')?.value;
     if (!session) return null;
-    return await decrypt(session) as { user: Record<string, unknown> } | null;
+    return await decrypt(session) as { user: { id: string, name: string, email: string, role: string } } | null;
   } catch (error) {
     return null;
   }

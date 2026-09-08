@@ -37,33 +37,40 @@ export function WorkspaceProvider({
   initialWorkspaces?: Workspace[];
 }) {
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    
-    try {
-      const savedWorkspace = window.localStorage.getItem(STORAGE_KEY);
-      if (savedWorkspace) {
-        return savedWorkspace;
-      }
-    } catch {
-      // ignore
-    }
     return initialWorkspaces.length > 0 ? initialWorkspaces[0].id : null;
   });
 
-  // Keep ID in sync if the initial list changes and the current ID is invalid
+  // Hydrate from localStorage and keep ID in sync if the initial list changes
   useEffect(() => {
     if (initialWorkspaces.length > 0) {
-      if (!currentWorkspaceId || !initialWorkspaces.some(w => w.id === currentWorkspaceId)) {
-        const id = initialWorkspaces[0].id;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setCurrentWorkspaceId(id);
-        window.localStorage.setItem(STORAGE_KEY, id);
+      let savedWorkspace: string | null = null;
+      try {
+        savedWorkspace = window.localStorage.getItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+
+      if (savedWorkspace && initialWorkspaces.some((w) => w.id === savedWorkspace)) {
+        if (currentWorkspaceId !== savedWorkspace) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setCurrentWorkspaceId(savedWorkspace);
+        }
+      } else {
+        const firstId = initialWorkspaces[0].id;
+        if (currentWorkspaceId !== firstId) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setCurrentWorkspaceId(firstId);
+        }
+        try {
+          window.localStorage.setItem(STORAGE_KEY, firstId);
+        } catch {}
       }
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentWorkspaceId(null);
     }
-  }, [initialWorkspaces, currentWorkspaceId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialWorkspaces]);
 
   const setWorkspace = useCallback((id: string) => {
     setCurrentWorkspaceId(id);
@@ -72,10 +79,14 @@ export function WorkspaceProvider({
     }
   }, []);
 
-  const fallbackWorkspace: Workspace = { id: "", name: "Loading...", description: "" };
+  const fallbackWorkspace: Workspace = { 
+    id: "", 
+    name: initialWorkspaces.length === 0 ? "No Workspace" : "Loading...", 
+    description: "" 
+  };
 
-  const currentWorkspace = currentWorkspaceId 
-    ? initialWorkspaces.find((w) => w.id === currentWorkspaceId) || fallbackWorkspace 
+  const currentWorkspace = currentWorkspaceId
+    ? initialWorkspaces.find((w) => w.id === currentWorkspaceId) || fallbackWorkspace
     : fallbackWorkspace;
 
   const value = useMemo(

@@ -75,7 +75,7 @@ export function AuditProvider({ children }: { children: ReactNode }) {
         startDate: a.start_date,
         dueDate: a.due_date
       }));
-      setAudits(mapped);
+      setAudits(mapped as Audit[]);
     }
     setLoading(false);
   }, [currentWorkspace?.id]);
