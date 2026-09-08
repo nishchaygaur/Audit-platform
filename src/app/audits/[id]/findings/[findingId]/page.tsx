@@ -13,7 +13,6 @@ import {
   FileWarning,
   Link2,
   MessageSquare,
-  Pencil,
   Plus,
   ShieldCheck,
   UserRound,
@@ -28,6 +27,23 @@ import {
   type FindingStatus,
   VALID_FINDING_STATUSES,
 } from "@/actions/findings";
+
+type FindingDbRow = {
+  id: string;
+  reference: string;
+  title: string;
+  description: string;
+  framework: string;
+  control: string;
+  severity: FindingSeverity;
+  owner: string;
+  identified_date: string;
+  due_date: string;
+  status: FindingStatus;
+  evidence?: string;
+  recommendation?: string;
+  auditor?: string;
+};
 
 type Finding = {
   id: string;
@@ -80,7 +96,7 @@ export default function FindingDetailsPage() {
         const res = await getFinding(currentWorkspace.id, params.findingId, params.id);
         if (isMounted) {
           if (res.success && res.data) {
-            const d = res.data as any;
+            const d = res.data as unknown as FindingDbRow;
             setFinding({
               id: d.id,
               reference: d.reference,

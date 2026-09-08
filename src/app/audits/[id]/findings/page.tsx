@@ -63,6 +63,23 @@ const [...SEVERITY_OPTIONS] = VALID_FINDING_SEVERITIES;
 
 const [...STATUS_OPTIONS] = VALID_FINDING_STATUSES;
 
+type FindingDbRow = {
+  id: string;
+  reference: string;
+  title: string;
+  description: string;
+  framework: string;
+  control: string;
+  severity: FindingSeverity;
+  owner: string;
+  identified_date: string;
+  due_date: string;
+  status: FindingStatus;
+  evidence?: string;
+  recommendation?: string;
+  auditor?: string;
+};
+
 export default function FindingsPage() {
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace.id;
@@ -74,12 +91,12 @@ export default function FindingsPage() {
 
   const loadFindings = useCallback(async () => {
     if (workspaceId && auditId) {
-      setLoading(true);
       try {
         const res = await getFindings(workspaceId, auditId);
         if (res.success && res.data) {
+          const rows = res.data as unknown as FindingDbRow[];
           setFindings(
-            res.data.map((f: any) => ({
+            rows.map((f) => ({
               id: f.id,
               reference: f.reference,
               title: f.title,
@@ -96,6 +113,8 @@ export default function FindingsPage() {
         } else {
           setFindings([]);
         }
+      } catch {
+        setFindings([]);
       } finally {
         setLoading(false);
       }
@@ -106,8 +125,52 @@ export default function FindingsPage() {
   }, [workspaceId, auditId]);
 
   useEffect(() => {
-    loadFindings();
-  }, [loadFindings]);
+    let isMounted = true;
+    async function init() {
+      if (workspaceId && auditId) {
+        setLoading(true);
+        try {
+          const res = await getFindings(workspaceId, auditId);
+          if (isMounted) {
+            if (res.success && res.data) {
+              const rows = res.data as unknown as FindingDbRow[];
+              setFindings(
+                rows.map((f) => ({
+                  id: f.id,
+                  reference: f.reference,
+                  title: f.title,
+                  description: f.description,
+                  framework: f.framework,
+                  control: f.control,
+                  severity: f.severity,
+                  owner: f.owner,
+                  identifiedDate: f.identified_date,
+                  dueDate: f.due_date,
+                  status: f.status,
+                }))
+              );
+            } else {
+              setFindings([]);
+            }
+          }
+        } catch {
+          if (isMounted) setFindings([]);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      } else {
+        if (isMounted) {
+          setFindings([]);
+          setLoading(false);
+        }
+      }
+    }
+
+    init();
+    return () => {
+      isMounted = false;
+    };
+  }, [workspaceId, auditId]);
 
   const [search, setSearch] = useState("");
 
@@ -143,8 +206,6 @@ export default function FindingsPage() {
   const [formDueDate, setFormDueDate] = useState("");
   const [formStatus, setFormStatus] =
     useState<FindingStatus>("Open");
-
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading findings...</div>;
 
   const filteredFindings = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -537,7 +598,18 @@ export default function FindingsPage() {
                 </thead>
 
                 <tbody>
-                  {filteredFindings.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-5 py-14 text-center"
+                      >
+                        <p className="text-[12px] font-medium text-slate-500">
+                          Loading findings...
+                        </p>
+                      </td>
+                    </tr>
+                  ) : filteredFindings.length > 0 ? (
                     filteredFindings.map((finding) => (
                       <FindingRow
                         key={finding.id}
