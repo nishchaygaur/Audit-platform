@@ -1,6 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Plus,
@@ -16,15 +16,22 @@ import {
   ChevronDown,
   UsersRound,
   ShieldCheck,
+  Loader2,
 } from "lucide-react";
 
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import {
+  getAuditPlans,
+  createAuditPlan,
+  updateAuditPlan,
+  deleteAuditPlan,
+} from "@/actions/audit-plans";
 
 type PlanStatus = "Draft" | "Active" | "Completed" | "Archived";
 
 type AuditPlan = {
-  id: number;
+  id: string;
   name: string;
   description: string;
   framework: string;
@@ -52,154 +59,13 @@ const STATUS_OPTIONS: PlanStatus[] = [
   "Archived",
 ];
 
-const INITIAL_PLANS: Record<string, AuditPlan[]> = {
-  "abc-technologies": [
-    {
-      id: 1,
-      name: "2024 Information Security Audit Plan",
-      description:
-        "Annual internal audit programme covering information security controls and compliance.",
-      framework: "ISO 27001",
-      owner: "Alice Smith",
-      startDate: "01 May 2024",
-      endDate: "30 Jun 2024",
-      audits: 8,
-      completed: 4,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "NIST CSF Assessment Programme",
-      description:
-        "Risk-based assessment programme aligned with the NIST Cybersecurity Framework.",
-      framework: "NIST CSF",
-      owner: "John Carter",
-      startDate: "01 Jun 2024",
-      endDate: "31 Jul 2024",
-      audits: 5,
-      completed: 2,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Third-Party Security Review",
-      description:
-        "Planned security assessments for critical vendors and service providers.",
-      framework: "NIST RMF",
-      owner: "Emily Davis",
-      startDate: "01 Jul 2024",
-      endDate: "31 Aug 2024",
-      audits: 6,
-      completed: 0,
-      status: "Draft",
-    },
-    {
-      id: 4,
-      name: "Access Control Review 2024",
-      description:
-        "Review programme for identity, access control and privileged access management.",
-      framework: "NIST 800-53",
-      owner: "Michael Lee",
-      startDate: "01 Apr 2024",
-      endDate: "31 May 2024",
-      audits: 4,
-      completed: 4,
-      status: "Completed",
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: 11,
-      name: "Financial Services Compliance Plan",
-      description:
-        "Annual compliance audit programme for financial security and regulatory controls.",
-      framework: "ISO 27001",
-      owner: "Sarah Brown",
-      startDate: "01 May 2024",
-      endDate: "31 Jul 2024",
-      audits: 10,
-      completed: 5,
-      status: "Active",
-    },
-    {
-      id: 12,
-      name: "Cyber Risk Assessment Programme",
-      description:
-        "Enterprise cyber risk assessments across critical business functions.",
-      framework: "NIST CSF",
-      owner: "David Wilson",
-      startDate: "15 Jun 2024",
-      endDate: "31 Aug 2024",
-      audits: 7,
-      completed: 1,
-      status: "Active",
-    },
-    {
-      id: 13,
-      name: "Vendor Assurance Programme",
-      description:
-        "Security review programme covering financial technology vendors.",
-      framework: "SOC 2",
-      owner: "Sarah Brown",
-      startDate: "01 Aug 2024",
-      endDate: "30 Sep 2024",
-      audits: 5,
-      completed: 0,
-      status: "Draft",
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: 21,
-      name: "Healthcare Security Audit Plan",
-      description:
-        "Security and compliance audit programme for healthcare information systems.",
-      framework: "ISO 27001",
-      owner: "Michael Lee",
-      startDate: "01 May 2024",
-      endDate: "30 Jun 2024",
-      audits: 9,
-      completed: 3,
-      status: "Active",
-    },
-    {
-      id: 22,
-      name: "Clinical Systems Risk Review",
-      description:
-        "Risk-focused assessment programme for clinical and patient-facing systems.",
-      framework: "NIST RMF",
-      owner: "Emily Davis",
-      startDate: "01 Jul 2024",
-      endDate: "31 Aug 2024",
-      audits: 6,
-      completed: 0,
-      status: "Draft",
-    },
-    {
-      id: 23,
-      name: "Security Controls Validation",
-      description:
-        "Validation of technical and administrative security safeguards.",
-      framework: "NIST 800-53",
-      owner: "John Carter",
-      startDate: "01 Mar 2024",
-      endDate: "30 Apr 2024",
-      audits: 4,
-      completed: 4,
-      status: "Completed",
-    },
-  ],
-};
-
 export default function AuditPlansPage() {
   const { currentWorkspace } = useWorkspace();
 
   const workspaceId = currentWorkspace.id;
 
-  const [plansByWorkspace, setPlansByWorkspace] =
-    useState<Record<string, AuditPlan[]>>(INITIAL_PLANS);
+  const [plans, setPlans] = useState<AuditPlan[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -211,7 +77,7 @@ export default function AuditPlansPage() {
   const [editingPlan, setEditingPlan] =
     useState<AuditPlan | null>(null);
 
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -224,7 +90,32 @@ export default function AuditPlansPage() {
   const [formStatus, setFormStatus] =
     useState<PlanStatus>("Draft");
 
-  const plans = plansByWorkspace[workspaceId] ?? [];
+  const loadPlans = async () => {
+    if (!workspaceId) return;
+    setLoading(true);
+    const res = await getAuditPlans(workspaceId);
+    if (res.success && res.data) {
+      setPlans(
+        res.data.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          framework: p.framework,
+          owner: p.owner,
+          startDate: p.start_date || "Not scheduled",
+          endDate: p.end_date || "Not scheduled",
+          audits: p.audits_count || 1,
+          completed: p.completed_count || 0,
+          status: p.status,
+        }))
+      );
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadPlans();
+  }, [workspaceId]);
 
   const filteredPlans = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -295,7 +186,7 @@ export default function AuditPlansPage() {
     setShowModal(true);
   }
 
-  function savePlan() {
+  async function savePlan() {
     if (!formName.trim()) {
       return;
     }
@@ -306,60 +197,46 @@ export default function AuditPlansPage() {
     );
 
     if (editingPlan) {
-      setPlansByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: (current[workspaceId] ?? []).map(
-          (plan) =>
-            plan.id === editingPlan.id
-              ? {
-                  ...plan,
-                  name: formName.trim(),
-                  description: formDescription.trim(),
-                  framework: formFramework,
-                  owner: formOwner.trim() || "Unassigned",
-                  startDate:
-                    formStartDate || "Not scheduled",
-                  endDate:
-                    formEndDate || "Not scheduled",
-                  audits,
-                  status: formStatus,
-                  completed: Math.min(
-                    plan.completed,
-                    audits
-                  ),
-                }
-              : plan
-        ),
-      }));
-    } else {
-      const newPlan: AuditPlan = {
-        id: Date.now(),
+      const res = await updateAuditPlan(workspaceId, editingPlan.id, {
         name: formName.trim(),
         description: formDescription.trim(),
         framework: formFramework,
         owner: formOwner.trim() || "Unassigned",
         startDate: formStartDate || "Not scheduled",
         endDate: formEndDate || "Not scheduled",
-        audits,
-        completed: 0,
+        auditsCount: audits,
         status: formStatus,
-      };
+      });
 
-      setPlansByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: [
-          newPlan,
-          ...(current[workspaceId] ?? []),
-        ],
-      }));
+      if (!res.success) {
+        alert(res.error || "Failed to update audit plan");
+        return;
+      }
+    } else {
+      const res = await createAuditPlan(workspaceId, {
+        name: formName.trim(),
+        description: formDescription.trim(),
+        framework: formFramework,
+        owner: formOwner.trim() || "Unassigned",
+        startDate: formStartDate || "Not scheduled",
+        endDate: formEndDate || "Not scheduled",
+        auditsCount: audits,
+        status: formStatus,
+      });
+
+      if (!res.success) {
+        alert(res.error || "Failed to create audit plan");
+        return;
+      }
     }
 
+    await loadPlans();
     setShowModal(false);
     setEditingPlan(null);
     resetForm();
   }
 
-  function deletePlan(plan: AuditPlan) {
+  async function deletePlan(plan: AuditPlan) {
     const confirmed = window.confirm(
       `Remove "${plan.name}" from this workspace?`
     );
@@ -368,30 +245,29 @@ export default function AuditPlansPage() {
       return;
     }
 
-    setPlansByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (current[workspaceId] ?? []).filter(
-        (item) => item.id !== plan.id
-      ),
-    }));
+    const res = await deleteAuditPlan(workspaceId, plan.id);
+    if (!res.success) {
+      alert(res.error || "Failed to delete audit plan");
+      return;
+    }
 
+    await loadPlans();
     setOpenMenu(null);
   }
 
-  function toggleStatus(plan: AuditPlan) {
+  async function toggleStatus(plan: AuditPlan) {
     const nextStatus: PlanStatus =
       plan.status === "Active" ? "Archived" : "Active";
 
-    setPlansByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (current[workspaceId] ?? []).map(
-        (item) =>
-          item.id === plan.id
-            ? { ...item, status: nextStatus }
-            : item
-      ),
-    }));
+    const res = await updateAuditPlan(workspaceId, plan.id, {
+      status: nextStatus,
+    });
+    if (!res.success) {
+      alert(res.error || "Failed to update plan status");
+      return;
+    }
 
+    await loadPlans();
     setOpenMenu(null);
   }
 

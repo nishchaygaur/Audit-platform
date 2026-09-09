@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
 function getJwtKey(): Uint8Array {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-audit-platform-jwt-secret-key-32-chars-min' : undefined);
   if (!secret) {
     throw new Error('JWT_SECRET environment variable is required');
   }

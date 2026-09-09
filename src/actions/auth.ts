@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 import crypto from 'crypto';
 
 export async function signIn(formData: FormData) {
-  const email = formData.get('email') as string;
+  const email = (formData.get('email') as string)?.trim().toLowerCase();
   const password = formData.get('password') as string;
 
   if (!email || !password) {
@@ -21,7 +21,7 @@ export async function signIn(formData: FormData) {
       email: string;
       password: string;
       role: string;
-    }>('SELECT * FROM users WHERE email = $1', [email]);
+    }>('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     
     if (!user) {
       return { error: 'Invalid credentials' };
@@ -43,14 +43,14 @@ export async function signIn(formData: FormData) {
     await setSession(userObj);
     return { success: true };
   } catch (err) {
-    console.error(err);
+    console.error('[Auth] Error during sign in:', err);
     return { error: 'An error occurred during sign in' };
   }
 }
 
 export async function signUp(formData: FormData) {
-  const name = formData.get('name') as string;
-  const email = formData.get('email') as string;
+  const name = (formData.get('name') as string)?.trim();
+  const email = (formData.get('email') as string)?.trim().toLowerCase();
   const password = formData.get('password') as string;
 
   if (!name || !email || !password) {
@@ -58,7 +58,10 @@ export async function signUp(formData: FormData) {
   }
 
   try {
-    const existing = await db.queryOne<{ id: string }>('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await db.queryOne<{ id: string }>(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
     if (existing) {
       return { error: 'Email is already registered' };
     }
@@ -66,11 +69,12 @@ export async function signUp(formData: FormData) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const id = crypto.randomUUID();
 
-    const userCountRow = await db.queryOne<{ count: string | number }>('SELECT COUNT(*) as count FROM users');
-    const isFirstUser = Number(userCountRow?.count || 0) === 0;
-
-    // Use a transaction to ensure all inserts succeed together
+    // Use a transaction to ensure all inserts succeed together atomically
     await db.transaction(async (tx) => {
+      // Check user count atomically inside the transaction to prevent race conditions
+      const userCountRow = await tx.queryOne<{ count: string | number }>('SELECT COUNT(*) as count FROM users');
+      const isFirstUser = Number(userCountRow?.count || 0) === 0;
+
       // Global user role defaults to Viewer for everyone. Workspace roles are authoritative.
       await tx.execute(
         'INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, $5)',
@@ -99,8 +103,18 @@ export async function signUp(formData: FormData) {
 
     await setSession(userObj);
     return { success: true };
-  } catch (err) {
-    console.error(err);
+  } catch (err: unknown) {
+    console.error('[Auth] Error during registration:', err);
+
+    // Controlled duplicate email error handling for race conditions or database unique constraint
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === '23505') {
+      return { error: 'Email is already registered' };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('duplicate key') || message.includes('unique constraint') || message.includes('users_email_key')) {
+      return { error: 'Email is already registered' };
+    }
+
     return { error: 'An error occurred during registration' };
   }
 }

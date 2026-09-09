@@ -26,7 +26,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#f6f8fc]">
-        <AuthProvider initialUser={session?.user as any || null}>
+        <AuthProvider initialUser={session ? session.user : null}>
           <WorkspaceProvider initialWorkspaces={initialWorkspaces}>
             <AuditProvider>
               <div className="flex h-screen overflow-hidden">

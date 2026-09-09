@@ -48,6 +48,7 @@ export default function SignInPage() {
       setError(result.error);
       setLoading(false);
     } else {
+      router.refresh();
       router.push("/workspaces");
     }
   }

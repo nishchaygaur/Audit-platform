@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   BarChart3,
   CheckCircle2,
@@ -10,6 +11,7 @@ import {
   FileBarChart,
   FileText,
   Filter,
+  Loader2,
   MoreHorizontal,
   Plus,
   Search,
@@ -19,6 +21,12 @@ import {
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import {
+  getReports,
+  generateReport as generateReportAction,
+  deleteReport as deleteReportAction,
+  type ReportRecord,
+} from "@/actions/reports";
 
 type ReportStatus = "Draft" | "Generating" | "Completed" | "Failed";
 
@@ -34,138 +42,6 @@ type Framework =
   | "NIST RMF"
   | "SOC 2"
   | "Multi-Framework";
-
-type Report = {
-  id: number;
-  reference: string;
-  name: string;
-  type: ReportType;
-  framework: Framework;
-  period: string;
-  findings: number;
-  risks: number;
-  remediation: number;
-  evidence: number;
-  createdBy: string;
-  createdAt: string;
-  status: ReportStatus;
-};
-
-const INITIAL_REPORTS: Record<string, Report[]> = {
-  "abc-technologies": [
-    {
-      id: 1,
-      reference: "RPT-2024-001",
-      name: "Annual Security Audit Report",
-      type: "Audit Report",
-      framework: "ISO 27001",
-      period: "01 Apr 2024 – 31 May 2024",
-      findings: 5,
-      risks: 18,
-      remediation: 12,
-      evidence: 42,
-      createdBy: "Alice Smith",
-      createdAt: "31 May 2024",
-      status: "Completed",
-    },
-    {
-      id: 2,
-      reference: "RPT-2024-002",
-      name: "ISO 27001 Compliance Assessment",
-      type: "Compliance Report",
-      framework: "ISO 27001",
-      period: "01 May 2024 – 31 May 2024",
-      findings: 5,
-      risks: 11,
-      remediation: 8,
-      evidence: 36,
-      createdBy: "John Carter",
-      createdAt: "01 Jun 2024",
-      status: "Completed",
-    },
-    {
-      id: 3,
-      reference: "RPT-2024-003",
-      name: "Management Review Report",
-      type: "Management Report",
-      framework: "Multi-Framework",
-      period: "01 Apr 2024 – 31 May 2024",
-      findings: 5,
-      risks: 18,
-      remediation: 12,
-      evidence: 42,
-      createdBy: "Emily Davis",
-      createdAt: "03 Jun 2024",
-      status: "Draft",
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: 11,
-      reference: "RPT-2024-011",
-      name: "Financial Security Audit Report",
-      type: "Audit Report",
-      framework: "NIST CSF",
-      period: "01 Apr 2024 – 31 May 2024",
-      findings: 4,
-      risks: 14,
-      remediation: 9,
-      evidence: 38,
-      createdBy: "Sarah Brown",
-      createdAt: "31 May 2024",
-      status: "Completed",
-    },
-    {
-      id: 12,
-      reference: "RPT-2024-012",
-      name: "NIST CSF Compliance Assessment",
-      type: "Compliance Report",
-      framework: "NIST CSF",
-      period: "01 May 2024 – 31 May 2024",
-      findings: 4,
-      risks: 9,
-      remediation: 6,
-      evidence: 31,
-      createdBy: "David Wilson",
-      createdAt: "02 Jun 2024",
-      status: "Completed",
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: 21,
-      reference: "RPT-2024-021",
-      name: "Healthcare Security Audit Report",
-      type: "Audit Report",
-      framework: "ISO 27001",
-      period: "01 Apr 2024 – 31 May 2024",
-      findings: 3,
-      risks: 12,
-      remediation: 7,
-      evidence: 34,
-      createdBy: "Michael Lee",
-      createdAt: "31 May 2024",
-      status: "Completed",
-    },
-    {
-      id: 22,
-      reference: "RPT-2024-022",
-      name: "Security Compliance Review",
-      type: "Compliance Report",
-      framework: "NIST RMF",
-      period: "01 May 2024 – 31 May 2024",
-      findings: 3,
-      risks: 8,
-      remediation: 5,
-      evidence: 28,
-      createdBy: "Emily Davis",
-      createdAt: "04 Jun 2024",
-      status: "Draft",
-    },
-  ],
-};
 
 const REPORT_TYPES: ReportType[] = [
   "Executive Summary",
@@ -190,7 +66,7 @@ const STATUS_OPTIONS: Array<ReportStatus | "All Statuses"> = [
   "Failed",
 ];
 
-function statusClasses(status: ReportStatus) {
+function statusClasses(status: string) {
   switch (status) {
     case "Completed":
       return "bg-emerald-50 text-emerald-700";
@@ -200,14 +76,26 @@ function statusClasses(status: ReportStatus) {
       return "bg-amber-50 text-amber-700";
     case "Failed":
       return "bg-red-50 text-red-700";
+    default:
+      return "bg-slate-100 text-slate-700";
   }
 }
 
-function statusIcon(status: ReportStatus) {
+function statusIcon(status: string) {
   if (status === "Completed") return <CheckCircle2 size={14} />;
   if (status === "Generating") return <Clock3 size={14} />;
   if (status === "Failed") return <ShieldAlert size={14} />;
   return <FileText size={14} />;
+}
+
+function downloadReportJson(report: ReportRecord) {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
+  const downloadAnchor = document.createElement("a");
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `${report.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
 }
 
 function ReportRow({
@@ -215,11 +103,17 @@ function ReportRow({
   onView,
   onDelete,
 }: {
-  report: Report;
+  report: ReportRecord;
   onView: () => void;
   onDelete: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const refCode = `RPT-${report.id.substring(0, 8).toUpperCase()}`;
+  const period = new Date(report.created_at).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
   return (
     <tr className="border-b border-[#edf0f5] hover:bg-[#fafbfe]">
@@ -229,7 +123,7 @@ function ReportRow({
             {report.name}
           </p>
           <p className="mt-1 text-[11px] text-[#8a94a6]">
-            {report.reference}
+            {refCode}
           </p>
         </div>
       </td>
@@ -242,27 +136,27 @@ function ReportRow({
 
       <td className="px-5 py-4">
         <span className="text-[12px] font-medium text-[#374151]">
-          {report.framework}
+          {report.framework || "ISO 27001"}
         </span>
       </td>
 
       <td className="px-5 py-4">
-        <p className="text-[12px] text-[#4b5563]">{report.period}</p>
+        <p className="text-[12px] text-[#4b5563]">{period}</p>
       </td>
 
       <td className="px-5 py-4">
         <div className="flex items-center gap-3 text-[12px]">
           <span title="Findings" className="text-[#ef4444]">
-            F {report.findings}
+            F {report.summary_stats?.findingsCount ?? 0}
           </span>
           <span title="Risks" className="text-[#f59e0b]">
-            R {report.risks}
+            R {report.summary_stats?.risksCount ?? 0}
           </span>
-          <span title="Remediation" className="text-[#3b82f6]">
-            M {report.remediation}
+          <span title="Controls" className="text-[#3b82f6]">
+            C {report.summary_stats?.controlsCount ?? 0}
           </span>
           <span title="Evidence" className="text-[#10b981]">
-            E {report.evidence}
+            E {report.summary_stats?.evidenceCount ?? 0}
           </span>
         </div>
       </td>
@@ -303,7 +197,7 @@ function ReportRow({
               <button
                 onClick={() => {
                   setMenuOpen(false);
-                  alert(`Preparing ${report.reference} for download.`);
+                  downloadReportJson(report);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[#374151] hover:bg-[#f5f7fa]"
               >
@@ -329,14 +223,16 @@ function ReportRow({
   );
 }
 
-export default function ReportsPage() {
+export default function AuditReportsPage() {
+  const params = useParams();
+  const auditId = Array.isArray(params.id) ? params.id[0] : (params.id as string);
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace.id;
 
-  const [reportsByWorkspace, setReportsByWorkspace] =
-    useState<Record<string, Report[]>>(INITIAL_REPORTS);
-
-  const reports = reportsByWorkspace[workspaceId] ?? [];
+  const [reports, setReports] = useState<ReportRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -344,15 +240,33 @@ export default function ReportsPage() {
   >("All Statuses");
 
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ReportRecord | null>(null);
 
-  const [reportType, setReportType] =
-    useState<ReportType>("Audit Report");
-
-  const [framework, setFramework] =
-    useState<Framework>("ISO 27001");
-
+  const [reportType, setReportType] = useState<ReportType>("Audit Report");
+  const [framework, setFramework] = useState<Framework>("ISO 27001");
   const [reportName, setReportName] = useState("");
+
+  const loadReports = useCallback(async () => {
+    if (!workspaceId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getReports(workspaceId, auditId);
+      if (res.success && res.data) {
+        setReports(res.data);
+      } else {
+        setError(res.error || "Failed to load reports");
+      }
+    } catch {
+      setError("An error occurred while loading reports");
+    } finally {
+      setLoading(false);
+    }
+  }, [workspaceId, auditId]);
+
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
 
   const filteredReports = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -361,9 +275,9 @@ export default function ReportsPage() {
       const matchesSearch =
         !query ||
         report.name.toLowerCase().includes(query) ||
-        report.reference.toLowerCase().includes(query) ||
+        report.id.toLowerCase().includes(query) ||
         report.type.toLowerCase().includes(query) ||
-        report.framework.toLowerCase().includes(query);
+        (report.framework && report.framework.toLowerCase().includes(query));
 
       const matchesStatus =
         statusFilter === "All Statuses" ||
@@ -386,73 +300,56 @@ export default function ReportsPage() {
   ).length;
 
   const totalFindings = reports.reduce(
-    (sum, report) => sum + report.findings,
+    (sum, report) => sum + (report.summary_stats?.findingsCount ?? 0),
     0
   );
 
   const totalRisks = reports.reduce(
-    (sum, report) => sum + report.risks,
+    (sum, report) => sum + (report.summary_stats?.risksCount ?? 0),
     0
   );
 
-  function generateReport() {
-    if (!reportName.trim()) return;
+  async function handleGenerateReport() {
+    if (!reportName.trim() || !workspaceId || !auditId) return;
+    setGeneratingReport(true);
 
-    const newId =
-      Math.max(0, ...reports.map((report) => report.id)) + 1;
+    try {
+      const res = await generateReportAction(
+        workspaceId,
+        auditId,
+        reportType,
+        reportName.trim()
+      );
 
-    const newReport: Report = {
-      id: newId,
-      reference: `RPT-${new Date().getFullYear()}-${String(
-        newId
-      ).padStart(3, "0")}`,
-      name: reportName.trim(),
-      type: reportType,
-      framework,
-      period: "Current Audit Period",
-      findings: totalFindings || 0,
-      risks: totalRisks || 0,
-      remediation: 0,
-      evidence: 0,
-      createdBy: "Current User",
-      createdAt: new Date().toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-      status: "Generating",
-    };
-
-    setReportsByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: [newReport, ...(current[workspaceId] ?? [])],
-    }));
-
-    setShowGenerateModal(false);
-    setReportName("");
-
-    setTimeout(() => {
-      setReportsByWorkspace((current) => ({
-        ...current,
-        [workspaceId]: (current[workspaceId] ?? []).map((report) =>
-          report.id === newId
-            ? { ...report, status: "Completed" }
-            : report
-        ),
-      }));
-    }, 1200);
+      if (res.success && res.data) {
+        setReports((prev) => [res.data!, ...prev]);
+        setShowGenerateModal(false);
+        setReportName("");
+      } else {
+        alert(res.error || "Failed to generate report");
+      }
+    } catch {
+      alert("Error generating report");
+    } finally {
+      setGeneratingReport(false);
+    }
   }
 
-  function deleteReport(id: number) {
-    setReportsByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: (current[workspaceId] ?? []).filter(
-        (report) => report.id !== id
-      ),
-    }));
+  async function handleDeleteReport(id: string) {
+    if (!confirm("Are you sure you want to delete this report?")) return;
 
-    if (selectedReport?.id === id) {
-      setSelectedReport(null);
+    try {
+      const res = await deleteReportAction(workspaceId, id);
+      if (res.success) {
+        setReports((prev) => prev.filter((r) => r.id !== id));
+        if (selectedReport?.id === id) {
+          setSelectedReport(null);
+        }
+      } else {
+        alert(res.error || "Failed to delete report");
+      }
+    } catch {
+      alert("Error deleting report");
     }
   }
 
@@ -474,11 +371,11 @@ export default function ReportsPage() {
               </div>
 
               <h1 className="text-[25px] font-bold tracking-[-0.4px] text-[#111827]">
-                Reports
+                Audit Reports
               </h1>
 
               <p className="mt-1 text-[13px] text-[#7b8494]">
-                Generate, manage and review audit reports for{" "}
+                Generate, manage and review synthesized audit reports for{" "}
                 {currentWorkspace.name}.
               </p>
             </div>
@@ -492,7 +389,13 @@ export default function ReportsPage() {
             </button>
           </div>
 
-          {/* Summary */}
+          {error && (
+            <div className="mb-6 rounded-lg bg-red-50 p-4 text-sm text-red-700 border border-red-200">
+              {error}
+            </div>
+          )}
+
+          {/* Summary Cards */}
           <div className="mb-7 grid grid-cols-5 gap-4">
             <div className="rounded-xl border border-[#e5e9f0] bg-white p-5">
               <div className="mb-3 flex items-center justify-between">
@@ -503,7 +406,7 @@ export default function ReportsPage() {
               </div>
               <p className="text-[25px] font-bold">{reports.length}</p>
               <p className="mt-1 text-[11px] text-[#94a3b8]">
-                Across this workspace
+                For this audit
               </p>
             </div>
 
@@ -579,7 +482,7 @@ export default function ReportsPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search reports..."
+                  placeholder="Search reports by name, type, framework..."
                   className="h-10 w-full rounded-lg border border-[#e1e6ee] bg-[#fafbfc] pl-9 pr-3 text-[12px] outline-none placeholder:text-[#a3acba] focus:border-[#93b4f8]"
                 />
               </div>
@@ -603,7 +506,7 @@ export default function ReportsPage() {
 
                 <Filter
                   size={14}
-                  className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
                 />
               </div>
             </div>
@@ -623,7 +526,12 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {filteredReports.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center p-12 text-slate-500 gap-3">
+                <Loader2 className="animate-spin" size={20} />
+                <span>Loading reports from database...</span>
+              </div>
+            ) : filteredReports.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-6 py-16">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#f1f5f9]">
                   <FileBarChart
@@ -632,10 +540,10 @@ export default function ReportsPage() {
                   />
                 </div>
                 <p className="text-[13px] font-semibold text-[#374151]">
-                  No reports found
+                  No reports generated yet
                 </p>
                 <p className="mt-1 text-[11px] text-[#94a3b8]">
-                  Try changing your search or filters.
+                  Click &ldquo;Generate Report&rdquo; to create a synthesized report from this audit.
                 </p>
               </div>
             ) : (
@@ -673,7 +581,7 @@ export default function ReportsPage() {
                         key={report.id}
                         report={report}
                         onView={() => setSelectedReport(report)}
-                        onDelete={() => deleteReport(report.id)}
+                        onDelete={() => handleDeleteReport(report.id)}
                       />
                     ))}
                   </tbody>
@@ -708,7 +616,7 @@ export default function ReportsPage() {
                 Compliance Evidence
               </h3>
               <p className="mt-1.5 text-[11px] leading-5 text-[#7b8494]">
-                Reports can summarize evidence coverage against
+                Reports summarize evidence coverage against
                 the selected security and compliance framework.
               </p>
             </div>
@@ -742,7 +650,7 @@ export default function ReportsPage() {
                   Generate Report
                 </h2>
                 <p className="mt-1 text-[11px] text-[#8a94a6]">
-                  Create a report for the current workspace.
+                  Create an authoritative report for this audit.
                 </p>
               </div>
 
@@ -765,7 +673,7 @@ export default function ReportsPage() {
                   onChange={(event) =>
                     setReportName(event.target.value)
                   }
-                  placeholder="e.g. Q2 Security Audit Report"
+                  placeholder="e.g. Q2 Comprehensive Audit Report"
                   className="h-10 w-full rounded-lg border border-[#dfe4ec] px-3 text-[12px] outline-none focus:border-[#7aa2ed]"
                 />
               </div>
@@ -790,7 +698,7 @@ export default function ReportsPage() {
 
               <div>
                 <label className="mb-2 block text-[11px] font-semibold text-[#374151]">
-                  Framework
+                  Framework Focus
                 </label>
 
                 <select
@@ -812,17 +720,17 @@ export default function ReportsPage() {
                 </p>
 
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-[#64748b]">
-                  <span>• Audit overview</span>
-                  <span>• Findings summary</span>
-                  <span>• Risk summary</span>
+                  <span>• Scope & Objectives</span>
+                  <span>• Findings breakdown</span>
+                  <span>• Risk registers</span>
                   <span>• Remediation status</span>
-                  <span>• Evidence coverage</span>
-                  <span>• Framework information</span>
+                  <span>• Evidence tracking</span>
+                  <span>• Control assessments</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex justifynd gap-3 border-t border-[#edf0f5] px-6 py-4">
+            <div className="flex justify-end gap-3 border-t border-[#edf0f5] px-6 py-4">
               <button
                 onClick={() => setShowGenerateModal(false)}
                 className="rounded-lg border border-[#dfe4ec] px-4 py-2 text-[12px] font-medium text-[#475569] hover:bg-[#f8fafc]"
@@ -831,29 +739,33 @@ export default function ReportsPage() {
               </button>
 
               <button
-                disabled={!reportName.trim()}
-                onClick={generateReport}
+                disabled={!reportName.trim() || generatingReport}
+                onClick={handleGenerateReport}
                 className="flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <FileBarChart size={15} />
-                Generate Report
+                {generatingReport ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <FileBarChart size={15} />
+                )}
+                {generatingReport ? "Generating..." : "Generate Report"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Report Details Modal */}
+      {/* Report Details / Preview Modal */}
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[#edf0f5] px-6 py-5">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 bg-white z-10 flex items-start justify-between border-b border-[#edf0f5] px-6 py-5">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                  {selectedReport.reference}
+                  RPT-{selectedReport.id.substring(0, 8).toUpperCase()}
                 </p>
 
-                <h2 className="mt-1 text-[17px] font-bold text-[#111827]">
+                <h2 className="mt-1 text-[18px] font-bold text-[#111827]">
                   {selectedReport.name}
                 </h2>
 
@@ -863,7 +775,7 @@ export default function ReportsPage() {
                   </span>
 
                   <span className="rounded-md bg-blue-50 px-2.5 py-1 text-[10px] font-medium text-blue-700">
-                    {selectedReport.framework}
+                    {selectedReport.framework || "ISO 27001"}
                   </span>
 
                   <span
@@ -885,70 +797,100 @@ export default function ReportsPage() {
               </button>
             </div>
 
-            <div className="px-6 py-6">
-              <div className="mb-6 grid grid-cols-4 gap-3">
-                <div className="rounded-lg border border-[#e8ecf2] p-4">
-                  <p className="text-[10px] uppercase text-[#8a94a6]">
+            <div className="px-6 py-6 space-y-6">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
+                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
                     Findings
                   </p>
                   <p className="mt-1 text-[20px] font-bold text-red-600">
-                    {selectedReport.findings}
+                    {selectedReport.summary_stats?.findingsCount ?? 0}
                   </p>
+                  <span className="text-[10px] text-slate-500">
+                    Critical: {selectedReport.summary_stats?.criticalFindings ?? 0}
+                  </span>
                 </div>
 
-                <div className="rounded-lg border border-[#e8ecf2] p-4">
-                  <p className="text-[10px] uppercase text-[#8a94a6]">
+                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
+                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
                     Risks
                   </p>
                   <p className="mt-1 text-[20px] font-bold text-amber-600">
-                    {selectedReport.risks}
+                    {selectedReport.summary_stats?.risksCount ?? 0}
                   </p>
+                  <span className="text-[10px] text-slate-500">
+                    High: {selectedReport.summary_stats?.highRisks ?? 0}
+                  </span>
                 </div>
 
-                <div className="rounded-lg border border-[#e8ecf2] p-4">
-                  <p className="text-[10px] uppercase text-[#8a94a6]">
-                    Remediation
+                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
+                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
+                    Controls
                   </p>
                   <p className="mt-1 text-[20px] font-bold text-blue-600">
-                    {selectedReport.remediation}
+                    {selectedReport.summary_stats?.controlsCount ?? 0}
                   </p>
+                  <span className="text-[10px] text-slate-500">
+                    Compliant: {selectedReport.summary_stats?.compliantCount ?? 0}
+                  </span>
                 </div>
 
-                <div className="rounded-lg border border-[#e8ecf2] p-4">
-                  <p className="text-[10px] uppercase text-[#8a94a6]">
+                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
+                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
                     Evidence
                   </p>
                   <p className="mt-1 text-[20px] font-bold text-emerald-600">
-                    {selectedReport.evidence}
+                    {selectedReport.summary_stats?.evidenceCount ?? 0}
                   </p>
+                  <span className="text-[10px] text-slate-500">
+                    Artifacts attached
+                  </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-5">
+              {selectedReport.content?.executiveSummary && (
+                <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                    Executive Summary
+                  </h4>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    {selectedReport.content.executiveSummary}
+                  </p>
+                </div>
+              )}
+
+              {selectedReport.content?.scope && (
+                <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                    Scope & Objectives
+                  </h4>
+                  <p className="text-xs text-slate-700 leading-relaxed mb-2">
+                    <span className="font-semibold">Scope:</span> {selectedReport.content.scope}
+                  </p>
+                  {selectedReport.content.objectives && (
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      <span className="font-semibold">Objectives:</span> {selectedReport.content.objectives}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-5 rounded-lg border border-slate-200 p-4 bg-slate-50/50">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Audit Period
+                    Generated Date
                   </p>
                   <p className="mt-1 text-[12px] text-[#374151]">
-                    {selectedReport.period}
+                    {new Date(selectedReport.created_at).toLocaleString()}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Created By
+                    Generated By
                   </p>
                   <p className="mt-1 text-[12px] text-[#374151]">
-                    {selectedReport.createdBy}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Created
-                  </p>
-                  <p className="mt-1 text-[12px] text-[#374151]">
-                    {selectedReport.createdAt}
+                    {selectedReport.generated_by}
                   </p>
                 </div>
 
@@ -960,20 +902,25 @@ export default function ReportsPage() {
                     {currentWorkspace.name}
                   </p>
                 </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
+                    Audit Identifier
+                  </p>
+                  <p className="mt-1 text-[12px] font-mono text-[#374151]">
+                    {selectedReport.audit_id}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex justifynd gap-3 border-t border-[#edf0f5] px-6 py-4">
+            <div className="sticky bottom-0 bg-white z-10 flex justify-end gap-3 border-t border-[#edf0f5] px-6 py-4">
               <button
-                onClick={() =>
-                  alert(
-                    `Preparing ${selectedReport.reference} for download.`
-                  )
-                }
+                onClick={() => downloadReportJson(selectedReport)}
                 className="flex items-center gap-2 rounded-lg border border-[#dfe4ec] px-4 py-2 text-[12px] font-medium text-[#475569] hover:bg-[#f8fafc]"
               >
                 <Download size={15} />
-                Download
+                Download JSON
               </button>
 
               <button
@@ -989,4 +936,5 @@ export default function ReportsPage() {
     </div>
   );
 }
-export const dynamic = 'force-dynamic';
+
+export const dynamic = "force-dynamic";

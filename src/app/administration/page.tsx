@@ -119,9 +119,7 @@ export default function AdministrationPage() {
       });
     }
 
-    // eslint-disable-next-line react-hooks/set-state-inffect
     setSearch("");
-    // eslint-disable-next-line react-hooks/set-state-inffect
     setRoleFilter("All");
   }, [currentWorkspace?.id]);
 

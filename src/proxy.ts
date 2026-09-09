@@ -1,12 +1,14 @@
-console.log("PROXY IS RUNNING");
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'super-secret-key-for-audit-platform-dev';
-const key = new TextEncoder().encode(SECRET_KEY);
-
 const publicRoutes = ['/signin'];
+
+function getJwtKey(): Uint8Array | null {
+  const secret = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-audit-platform-jwt-secret-key-32-chars-min' : null);
+  if (!secret) return null;
+  return new TextEncoder().encode(secret);
+}
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -17,9 +19,12 @@ export async function proxy(request: NextRequest) {
   
   if (cookie) {
     try {
-      const { payload } = await jwtVerify(cookie, key, { algorithms: ['HS256'] });
-      session = payload;
-    } catch (e) {
+      const key = getJwtKey();
+      if (key) {
+        const { payload } = await jwtVerify(cookie, key, { algorithms: ['HS256'] });
+        session = payload;
+      }
+    } catch {
       // invalid token
     }
   }

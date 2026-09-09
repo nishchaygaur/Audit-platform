@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
   FileCheck2,
   FileText,
   FileWarning,
+  Loader2,
   MoreHorizontal,
   Search,
   ShieldAlert,
@@ -41,8 +42,6 @@ import {
   saveStoredRisks,
   getStoredRemediation,
   saveStoredRemediation,
-  getStoredReports,
-  saveStoredReports,
 } from "@/lib/grcData";
 import {
   getFindings,
@@ -54,6 +53,25 @@ import {
   createRisk,
   type RiskRecord,
 } from "@/actions/risks";
+import {
+  getAssessments,
+  updateAssessment,
+  type ControlAssessmentRecord,
+  type AssessmentStatus,
+} from "@/actions/assessments";
+import {
+  getEvidences,
+  createEvidence,
+  updateEvidence,
+  type EvidenceRecord,
+  type EvidenceStatus,
+} from "@/actions/evidence";
+import {
+  getReports,
+  generateReport,
+  deleteReport,
+  type ReportRecord,
+} from "@/actions/reports";
 
 /* ============================================================
    FALLBACK AUDIT DATA
@@ -1028,101 +1046,153 @@ function ScopePanel({ audit }: { audit: Audit }) {
 ============================================================ */
 
 function ControlsPanel({ audit }: { audit: Audit }) {
-  const auditControls = controlsByAuditId[audit.id] ?? controls;
+  const { currentWorkspace } = useWorkspace();
+  const [assessments, setAssessments] = useState<ControlAssessmentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("All Statuses");
+  const [domainFilter, setDomainFilter] = useState<string>("All Domains");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const summary = controlStatusSummaryByAuditId[audit.id] ?? {
-    compliant: 0,
-    partiallyCompliant: 0,
-    nonCompliant: 0,
-    underReview: 0,
+  const loadAssessments = async () => {
+    if (!currentWorkspace?.id || !audit.id) return;
+    setLoading(true);
+    const res = await getAssessments(currentWorkspace.id, audit.id);
+    if (res.success && res.data) {
+      setAssessments(res.data);
+    }
+    setLoading(false);
   };
+
+  useEffect(() => {
+    loadAssessments();
+  }, [currentWorkspace?.id, audit.id]);
+
+  const handleStatusChange = async (assessmentId: string, nextStatus: AssessmentStatus) => {
+    if (!currentWorkspace?.id) return;
+    setUpdatingId(assessmentId);
+    const res = await updateAssessment(currentWorkspace.id, assessmentId, audit.id, {
+      status: nextStatus,
+    });
+    if (!res.success) {
+      alert(res.error || "Failed to update assessment status");
+    } else {
+      await loadAssessments();
+    }
+    setUpdatingId(null);
+  };
+
+  const domains = useMemo(() => {
+    const set = new Set(assessments.map((a) => a.control_domain).filter(Boolean));
+    return Array.from(set);
+  }, [assessments]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return assessments.filter((a) => {
+      const matchSearch =
+        !q ||
+        a.control_id.toLowerCase().includes(q) ||
+        a.control_title.toLowerCase().includes(q) ||
+        (a.control_domain && a.control_domain.toLowerCase().includes(q)) ||
+        (a.requirement && a.requirement.toLowerCase().includes(q));
+      const matchStatus = statusFilter === "All Statuses" || a.status === statusFilter;
+      const matchDomain = domainFilter === "All Domains" || a.control_domain === domainFilter;
+      return matchSearch && matchStatus && matchDomain;
+    });
+  }, [assessments, search, statusFilter, domainFilter]);
+
+  const implementedCount = assessments.filter((a) => a.status === "Implemented").length;
+  const partiallyCount = assessments.filter((a) => a.status === "Partially Implemented").length;
+  const notImplementedCount = assessments.filter((a) => a.status === "Not Implemented").length;
+  const inProgressCount = assessments.filter((a) => a.status === "In Progress").length;
 
   return (
     <section className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
       {/* Header */}
-
       <div className="flex items-start justify-between border-b border-slate-100 px-5 py-5">
         <div>
           <h2 className="text-[16px] font-semibold text-slate-900">
-            Controls
+            Controls Assessment
           </h2>
-
           <p className="mt-1 text-[11px] text-slate-500">
-            Assess applicable framework controls for this audit.
+            Assess applicable framework controls for {audit.name} ({audit.framework}).
           </p>
         </div>
-
         <div className="text-right">
           <p className="text-[18px] font-semibold text-slate-900">
-            {audit.controls}
+            {assessments.length}
           </p>
-
           <p className="text-[10px] text-slate-400">Total Controls</p>
         </div>
       </div>
 
       {/* Summary */}
-
       <div className="grid grid-cols-4 border-b border-slate-100">
         <ControlSummary
-          label="Compliant"
-          value={String(summary.compliant)}
+          label="Implemented"
+          value={String(implementedCount)}
           className="text-emerald-600"
         />
-
         <ControlSummary
-          label="Partially Compliant"
-          value={String(summary.partiallyCompliant)}
-          className="text-amber-600"
+          label="Partially Implemented"
+          value={String(partiallyCount)}
+          className="text-blue-600"
         />
-
         <ControlSummary
-          label="Non-Compliant"
-          value={String(summary.nonCompliant)}
+          label="Not Implemented"
+          value={String(notImplementedCount)}
           className="text-red-600"
         />
-
         <ControlSummary
-          label="Under Review"
-          value={String(summary.underReview)}
-          className="text-blue-600"
+          label="In Progress"
+          value={String(inProgressCount)}
+          className="text-amber-600"
         />
       </div>
 
       {/* Toolbar */}
-
       <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-
           <input
             type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search controls..."
             className="h-9 w-[280px] rounded-md border border-slate-200 bg-white pl-9 pr-3 text-[12px] outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[11px] font-medium text-slate-600 outline-none hover:bg-slate-50"
           >
-            All Statuses
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
+            <option value="All Statuses">All Statuses</option>
+            <option value="Implemented">Implemented</option>
+            <option value="Partially Implemented">Partially Implemented</option>
+            <option value="Not Implemented">Not Implemented</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Not Started">Not Started</option>
+            <option value="Not Applicable">Not Applicable</option>
+          </select>
 
-          <button
-            type="button"
-            className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+          <select
+            value={domainFilter}
+            onChange={(e) => setDomainFilter(e.target.value)}
+            className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[11px] font-medium text-slate-600 outline-none hover:bg-slate-50"
           >
-            All Domains
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
+            <option value="All Domains">All Domains</option>
+            {domains.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Table */}
-
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1000px] border-collapse">
           <thead>
@@ -1130,71 +1200,46 @@ function ControlsPanel({ audit }: { audit: Audit }) {
               <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Control
               </th>
-
               <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Domain
               </th>
-
               <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Evidence
               </th>
-
               <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Findings
               </th>
-
               <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Status
+                Assessment Status
               </th>
-
-              <th className="w-10 px-3 py-3" />
             </tr>
           </thead>
-
           <tbody>
-            {auditControls.map((control) => (
-              <ControlRow key={control.id} {...control} />
-            ))}
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-5 py-12 text-center text-[12px] text-slate-400">
+                  {loading ? "Loading control assessments..." : "No controls found matching filters."}
+                </td>
+              </tr>
+            ) : (
+              filtered.map((a) => (
+                <ControlAssessmentRow
+                  key={a.id}
+                  assessment={a}
+                  isUpdating={updatingId === a.id}
+                  onStatusChange={(newSt) => handleStatusChange(a.id, newSt)}
+                />
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Footer */}
-
       <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
         <span className="text-[10px] text-slate-400">
-          Showing {auditControls.length} of {audit.controls} controls
+          Showing {filtered.length} of {assessments.length} controls
         </span>
-
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="h-7 rounded border border-slate-200 px-2.5 text-[10px] text-slate-400"
-          >
-            Previous
-          </button>
-
-          <button
-            type="button"
-            className="h-7 rounded border border-blue-600 bg-blue-600 px-2.5 text-[10px] text-white"
-          >
-            1
-          </button>
-
-          <button
-            type="button"
-            className="h-7 rounded border border-slate-200 px-2.5 text-[10px] text-slate-600"
-          >
-            2
-          </button>
-
-          <button
-            type="button"
-            className="h-7 rounded border border-slate-200 px-2.5 text-[10px] text-slate-600"
-          >
-            Next
-          </button>
-        </div>
       </div>
     </section>
   );
@@ -1216,37 +1261,31 @@ function ControlSummary({
   return (
     <div className="border-r border-slate-100 px-5 py-4 last:border-r-0">
       <p className={`text-[19px] font-semibold ${className}`}>{value}</p>
-
       <p className="mt-1 text-[10px] text-slate-400">{label}</p>
     </div>
   );
 }
 
 /* ============================================================
-   CONTROL ROW
+   CONTROL ASSESSMENT ROW
 ============================================================ */
 
-function ControlRow({
-  id,
-  name,
-  domain,
-  evidence,
-  findings,
-  status,
+function ControlAssessmentRow({
+  assessment,
+  isUpdating,
+  onStatusChange,
 }: {
-  id: string;
-  name: string;
-  domain: string;
-  requirement: string;
-  evidence: number;
-  findings: number;
-  status: string;
+  assessment: ControlAssessmentRecord;
+  isUpdating: boolean;
+  onStatusChange: (status: AssessmentStatus) => void;
 }) {
-  const statusStyles: Record<string, string> = {
-    Compliant: "bg-emerald-50 text-emerald-700",
-    "Partially Compliant": "bg-blue-50 text-blue-700",
-    "Non-Compliant": "bg-red-50 text-red-700",
-    "Under Review": "bg-blue-50 text-blue-700",
+  const statusStyles: Record<AssessmentStatus, string> = {
+    "Implemented": "bg-emerald-50 text-emerald-700 border-emerald-200",
+    "Partially Implemented": "bg-blue-50 text-blue-700 border-blue-200",
+    "Not Implemented": "bg-red-50 text-red-700 border-red-200",
+    "In Progress": "bg-amber-50 text-amber-700 border-amber-200",
+    "Not Started": "bg-slate-100 text-slate-600 border-slate-200",
+    "Not Applicable": "bg-purple-50 text-purple-700 border-purple-200",
   };
 
   return (
@@ -1254,16 +1293,14 @@ function ControlRow({
       <td className="px-5 py-4">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[9px] font-semibold text-blue-700">
-            {id}
+            {assessment.control_id}
           </div>
-
           <div className="min-w-0">
             <p className="text-[12px] font-medium text-slate-800">
-              {name}
+              {assessment.control_title}
             </p>
-
             <p className="mt-1 text-[10px] leading-4 text-slate-400">
-              ISO 27001 control requirement
+              {assessment.requirement || "Framework control requirement"}
             </p>
           </div>
         </div>
@@ -1271,16 +1308,15 @@ function ControlRow({
 
       <td className="px-3 py-4">
         <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-          {domain}
+          {assessment.control_domain || "General"}
         </span>
       </td>
 
       <td className="px-3 py-4">
         <div className="flex items-center gap-1.5">
           <FileText className="h-3.5 w-3.5 text-slate-400" />
-
           <span className="text-[11px] font-medium text-slate-700">
-            {evidence}
+            {assessment.evidence_count}
           </span>
         </div>
       </td>
@@ -1289,33 +1325,34 @@ function ControlRow({
         <div className="flex items-center gap-1.5">
           <TriangleAlert
             className={`h-3.5 w-3.5 ${
-              findings > 0 ? "text-orange-500" : "text-slate-300"
+              assessment.findings_count > 0 ? "text-orange-500" : "text-slate-300"
             }`}
           />
-
           <span className="text-[11px] font-medium text-slate-700">
-            {findings}
+            {assessment.findings_count}
           </span>
         </div>
       </td>
 
       <td className="px-3 py-4">
-        <span
-          className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-medium ${
-            statusStyles[status] ?? "bg-slate-100 text-slate-600"
-          }`}
-        >
-          {status}
-        </span>
-      </td>
-
-      <td className="px-3 py-4">
-        <button
-          type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={assessment.status}
+            disabled={isUpdating}
+            onChange={(e) => onStatusChange(e.target.value as AssessmentStatus)}
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-medium outline-none transition cursor-pointer ${
+              statusStyles[assessment.status] ?? "bg-slate-100 text-slate-600 border-slate-200"
+            } ${isUpdating ? "opacity-50" : ""}`}
+          >
+            <option value="Not Started">Not Started</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Implemented">Implemented</option>
+            <option value="Partially Implemented">Partially Implemented</option>
+            <option value="Not Implemented">Not Implemented</option>
+            <option value="Not Applicable">Not Applicable</option>
+          </select>
+          {isUpdating && <Loader2 className="h-3 w-3 animate-spin text-blue-600" />}
+        </div>
       </td>
     </tr>
   );
@@ -1326,11 +1363,12 @@ function ControlRow({
 ============================================================ */
 
 function EvidencePanel({ audit }: { audit: Audit }) {
-  const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
+  const { currentWorkspace } = useWorkspace();
+  const [evidenceList, setEvidenceList] = useState<EvidenceRecord[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
+  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceRecord | null>(null);
 
   // Form state for Upload
   const [formName, setFormName] = useState("");
@@ -1339,65 +1377,17 @@ function EvidencePanel({ audit }: { audit: Audit }) {
   const [formOwner, setFormOwner] = useState(audit.lead || "Alice Smith");
   const [formDesc, setFormDesc] = useState("");
 
-  useEffect(() => {
-    const allEvidence = getStoredEvidence();
-    const filtered = allEvidence.filter((e) => e.auditId === audit.id);
-    if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEvidenceList(filtered);
-    } else {
-      // Create sensible defaults for this audit if none yet stored
-      const defaults: EvidenceItem[] = [
-        {
-          id: `EVD-${audit.id.replace("AUD-", "")}-001`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          name: `${audit.framework} Security Baseline.pdf`,
-          type: "PDF",
-          size: "2.1 MB",
-          control: "A.5.1",
-          framework: audit.framework,
-          owner: audit.lead,
-          status: "Accepted",
-          uploaded: "02 May 2024",
-          reviewedBy: "Auditor Team",
-          description: "Formal security baseline documentation.",
-        },
-        {
-          id: `EVD-${audit.id.replace("AUD-", "")}-002`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          name: "Access Control Verification Sample.xlsx",
-          type: "XLSX",
-          size: "820 KB",
-          control: "A.5.15",
-          framework: audit.framework,
-          owner: "Michael Lee",
-          status: "Under Review",
-          uploaded: "05 May 2024",
-          reviewedBy: audit.lead,
-          description: "Sample review of privileged user accesses.",
-        },
-        {
-          id: `EVD-${audit.id.replace("AUD-", "")}-003`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          name: "Security Training Compliance Roster.pdf",
-          type: "PDF",
-          size: "1.4 MB",
-          control: "A.6.3",
-          framework: audit.framework,
-          owner: "Emily Davis",
-          status: "Pending Review",
-          uploaded: "08 May 2024",
-          reviewedBy: "—",
-          description: "Roster of completed annual security training modules.",
-        },
-      ];
-      setEvidenceList(defaults);
-      saveStoredEvidence([...allEvidence, ...defaults]);
+  const loadEvidence = async () => {
+    if (!currentWorkspace?.id || !audit.id) return;
+    const res = await getEvidences(currentWorkspace.id, audit.id);
+    if (res.success && res.data) {
+      setEvidenceList(res.data);
     }
-  }, [audit.id, audit.framework, audit.lead]);
+  };
+
+  useEffect(() => {
+    loadEvidence();
+  }, [currentWorkspace?.id, audit.id]);
 
   const filteredEvidence = useMemo(() => {
     return evidenceList.filter((item) => {
@@ -1405,8 +1395,8 @@ function EvidencePanel({ audit }: { audit: Audit }) {
       const matchesSearch =
         !q ||
         item.name.toLowerCase().includes(q) ||
-        item.id.toLowerCase().includes(q) ||
-        item.control.toLowerCase().includes(q);
+        (item.reference && item.reference.toLowerCase().includes(q)) ||
+        (item.control && item.control.toLowerCase().includes(q));
       const matchesStatus =
         statusFilter === "All Statuses" || item.status === statusFilter;
       return matchesSearch && matchesStatus;
@@ -1419,54 +1409,49 @@ function EvidencePanel({ audit }: { audit: Audit }) {
   const underReviewCount = evidenceList.filter(
     (e) => e.status === "Under Review"
   ).length;
-  const pendingCount = evidenceList.filter(
-    (e) => e.status === "Pending Review"
+  const submittedCount = evidenceList.filter(
+    (e) => e.status === "Submitted"
   ).length;
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim() || !currentWorkspace?.id) return;
 
-    const all = getStoredEvidence();
-    const nextNum = all.length + 1;
-    const newId = `EVD-2024-${String(nextNum).padStart(3, "0")}`;
+    const fileName = formName.trim().endsWith(`.${formType.toLowerCase()}`)
+      ? formName.trim()
+      : `${formName.trim()}.${formType.toLowerCase()}`;
 
-    const newItem: EvidenceItem = {
-      id: newId,
-      workspaceId: "abc-technologies",
+    const res = await createEvidence(currentWorkspace.id, {
       auditId: audit.id,
-      name: formName.trim().endsWith(`.${formType.toLowerCase()}`)
-        ? formName.trim()
-        : `${formName.trim()}.${formType.toLowerCase()}`,
+      name: fileName,
       type: formType,
-      size: "1.2 MB",
-      control: formControl,
+      control: formControl.trim(),
       framework: audit.framework,
-      owner: formOwner,
-      status: "Pending Review",
-      uploaded: "Just now",
-      reviewedBy: "—",
+      uploadedBy: formOwner.trim(),
+      status: "Submitted",
+      size: "1.2 MB",
       description: formDesc || "Uploaded evidence for audit assessment.",
-    };
+    });
 
-    const updatedAll = [newItem, ...all];
-    saveStoredEvidence(updatedAll);
-    setEvidenceList([newItem, ...evidenceList]);
+    if (!res.success) {
+      alert(res.error || "Failed to upload evidence");
+      return;
+    }
+
+    await loadEvidence();
     setShowUploadModal(false);
     setFormName("");
     setFormDesc("");
   };
 
-  const updateStatus = (id: string, newStatus: EvidenceItem["status"]) => {
-    const updated = evidenceList.map((item) =>
-      item.id === id ? { ...item, status: newStatus } : item
-    );
-    setEvidenceList(updated);
-    const all = getStoredEvidence();
-    const updatedAll = all.map((item) =>
-      item.id === id ? { ...item, status: newStatus } : item
-    );
-    saveStoredEvidence(updatedAll);
+  const updateStatus = async (id: string, newStatus: EvidenceStatus) => {
+    if (!currentWorkspace?.id) return;
+    const res = await updateEvidence(currentWorkspace.id, id, { status: newStatus });
+    if (!res.success) {
+      alert(res.error || "Failed to update evidence status");
+      return;
+    }
+    await loadEvidence();
     if (selectedEvidence && selectedEvidence.id === id) {
       setSelectedEvidence({ ...selectedEvidence, status: newStatus });
     }
@@ -1512,8 +1497,8 @@ function EvidencePanel({ audit }: { audit: Audit }) {
           className="text-blue-600"
         />
         <ControlSummary
-          label="Pending Review"
-          value={String(pendingCount)}
+          label="Submitted"
+          value={String(submittedCount)}
           className="text-amber-600"
         />
       </div>
@@ -1532,7 +1517,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {["All Statuses", "Accepted", "Under Review", "Pending Review", "Rejected"].map(
+          {["All Statuses", "Requested", "Submitted", "Under Review", "Accepted", "Rejected"].map(
             (st) => (
               <button
                 key={st}
@@ -1576,11 +1561,11 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                     {item.name}
                   </button>
                   <p className="mt-1 text-[10px] text-slate-400">
-                    <span className="font-semibold text-slate-600">{item.id}</span> · Control:{" "}
+                    <span className="font-semibold text-slate-600">{item.reference || item.id}</span> · Control:{" "}
                     <span className="rounded bg-blue-50 px-1.5 py-0.5 font-medium text-blue-700">
                       {item.control}
                     </span>{" "}
-                    · Owner: {item.owner} · Uploaded: {item.uploaded}
+                    · Owner: {item.uploaded_by} · Uploaded: {item.date}
                   </p>
                 </div>
               </div>
@@ -1594,7 +1579,9 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                       ? "bg-blue-50 text-blue-700"
                       : item.status === "Rejected"
                       ? "bg-red-50 text-red-700"
-                      : "bg-blue-50 text-blue-700"
+                      : item.status === "Submitted"
+                      ? "bg-purple-50 text-purple-700"
+                      : "bg-amber-50 text-amber-700"
                   }`}
                 >
                   {item.status}
@@ -1717,7 +1704,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                 <p className="text-[10px] text-slate-400">PDF, XLSX, DOCX up to 25MB</p>
               </div>
 
-              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
@@ -1744,7 +1731,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                  {selectedEvidence.id}
+                  {selectedEvidence.reference || selectedEvidence.id}
                 </span>
                 <h3 className="mt-1 text-[15px] font-semibold text-slate-900">
                   {selectedEvidence.name}
@@ -1771,11 +1758,11 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                 </div>
                 <div>
                   <span className="text-[10px] font-medium text-slate-400">Owner</span>
-                  <p className="font-semibold text-slate-700">{selectedEvidence.owner}</p>
+                  <p className="font-semibold text-slate-700">{selectedEvidence.uploaded_by}</p>
                 </div>
                 <div>
                   <span className="text-[10px] font-medium text-slate-400">Uploaded</span>
-                  <p className="font-semibold text-slate-700">{selectedEvidence.uploaded}</p>
+                  <p className="font-semibold text-slate-700">{selectedEvidence.date}</p>
                 </div>
               </div>
 
@@ -1786,8 +1773,8 @@ function EvidencePanel({ audit }: { audit: Audit }) {
 
               <div className="pt-2">
                 <span className="text-[11px] font-medium text-slate-700">Review Status</span>
-                <div className="mt-1.5 flex gap-2">
-                  {(["Accepted", "Under Review", "Pending Review", "Rejected"] as EvidenceItem["status"][]).map(
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {(["Requested", "Submitted", "Under Review", "Accepted", "Rejected"] as EvidenceStatus[]).map(
                     (st) => (
                       <button
                         key={st}
@@ -1807,7 +1794,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
               </div>
             </div>
 
-            <div className="mt-6 flex justifynd border-t border-slate-100 pt-3">
+            <div className="mt-6 flex justify-end border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={() => setSelectedEvidence(null)}
@@ -3273,110 +3260,78 @@ function RemediationPanel({ audit }: { audit: Audit }) {
 ============================================================ */
 
 function ReportsPanel({ audit }: { audit: Audit }) {
-  const [reportsList, setReportsList] = useState<ReportItem[]>([]);
+  const { currentWorkspace } = useWorkspace();
+  const [reportsList, setReportsList] = useState<ReportRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ReportRecord | null>(null);
 
   // Form state
   const [formName, setFormName] = useState(`${audit.framework} Comprehensive Audit Report`);
-  const [formType, setFormType] = useState<ReportItem["type"]>("Audit Report");
+  const [formType, setFormType] = useState("Audit Report");
+
+  const loadReports = useCallback(async () => {
+    if (!currentWorkspace?.id || !audit.id) return;
+    setLoading(true);
+    const res = await getReports(currentWorkspace.id, audit.id);
+    if (res.success && res.data) {
+      setReportsList(res.data);
+    }
+    setLoading(false);
+  }, [currentWorkspace?.id, audit.id]);
 
   useEffect(() => {
-    const all = getStoredReports();
-    const filtered = all.filter((r) => r.auditId === audit.id);
-    if (filtered.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setReportsList(filtered);
-    } else {
-      const defaults: ReportItem[] = [
-        {
-          id: `RPT-${audit.id.replace("AUD-", "")}-001`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          name: `${audit.name} Final Executive Report`,
-          type: "Audit Report",
-          framework: audit.framework,
-          generatedBy: audit.lead,
-          generatedDate: "05 Sep 2026",
-          size: "2.4 MB",
-          status: "Completed",
-          summary: {
-            scopeCount: 6,
-            controlsCount: audit.controls,
-            compliantCount: Math.round(audit.controls * 0.65),
-            evidenceCount: audit.evidence,
-            findingsCount: audit.findings,
-            risksCount: audit.risks,
-            remediationCount: 4,
-          },
-        },
-        {
-          id: `RPT-${audit.id.replace("AUD-", "")}-002`,
-          workspaceId: "abc-technologies",
-          auditId: audit.id,
-          name: `${audit.framework} Compliance & Findings Matrix`,
-          type: "Compliance Report",
-          framework: audit.framework,
-          generatedBy: audit.lead,
-          generatedDate: "02 Sep 2026",
-          size: "1.1 MB",
-          status: "Completed",
-          summary: {
-            scopeCount: 6,
-            controlsCount: audit.controls,
-            compliantCount: Math.round(audit.controls * 0.65),
-            evidenceCount: audit.evidence,
-            findingsCount: audit.findings,
-            risksCount: audit.risks,
-            remediationCount: 4,
-          },
-        },
-      ];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setReportsList(defaults);
-      saveStoredReports([...all, ...defaults]);
-    }
-  }, [audit.id, audit.name, audit.framework, audit.lead, audit.controls, audit.evidence, audit.findings, audit.risks]);
+    loadReports();
+  }, [loadReports]);
 
-  const handleGenerateSubmit = (e: React.FormEvent) => {
+  const handleGenerateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim() || !currentWorkspace?.id) return;
 
-    const allReports = getStoredReports();
-    const allEvidence = getStoredEvidence().filter((e) => e.auditId === audit.id);
-    const allRisks = getStoredRisks().filter((r) => r.auditId === audit.id);
-    const allRem = getStoredRemediation().filter((r) => r.auditId === audit.id);
+    setGenerating(true);
+    const res = await generateReport(
+      currentWorkspace.id,
+      audit.id,
+      formType,
+      formName.trim()
+    );
+    setGenerating(false);
 
-    const nextNum = allReports.length + 1;
-    const newId = `RPT-${String(nextNum).padStart(3, "0")}`;
+    if (res.success && res.data) {
+      setShowGenerateModal(false);
+      await loadReports();
+      setSelectedReport(res.data);
+    } else {
+      alert(res.error || "Failed to generate report");
+    }
+  };
 
-    const newReport: ReportItem = {
-      id: newId,
-      workspaceId: "abc-technologies",
-      auditId: audit.id,
-      name: formName.trim(),
-      type: formType,
-      framework: audit.framework,
-      generatedBy: audit.lead || "System",
-      generatedDate: "Just now",
-      size: "1.8 MB",
-      status: "Completed",
-      summary: {
-        scopeCount: 6,
-        controlsCount: audit.controls,
-        compliantCount: Math.round(audit.controls * 0.72),
-        evidenceCount: allEvidence.length || audit.evidence,
-        findingsCount: audit.findings,
-        risksCount: allRisks.length || audit.risks,
-        remediationCount: allRem.length || 3,
-      },
-    };
+  const handleDeleteReport = async (reportId: string) => {
+    if (!currentWorkspace?.id) return;
+    if (!confirm("Are you sure you want to delete this report?")) return;
+    const res = await deleteReport(currentWorkspace.id, reportId);
+    if (res.success) {
+      if (selectedReport?.id === reportId) setSelectedReport(null);
+      await loadReports();
+    } else {
+      alert(res.error || "Failed to delete report");
+    }
+  };
 
-    const updatedAll = [newReport, ...allReports];
-    saveStoredReports(updatedAll);
-    setReportsList([newReport, ...reportsList]);
-    setShowGenerateModal(false);
-    setSelectedReport(newReport);
+  const handleDownload = (report: ReportRecord) => {
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(report, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", jsonString);
+    downloadAnchor.setAttribute(
+      "download",
+      `${report.id}_${report.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.json`
+    );
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   return (
@@ -3421,7 +3376,11 @@ function ReportsPanel({ audit }: { audit: Audit }) {
 
       <div className="p-5">
         <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
-          {reportsList.length === 0 ? (
+          {loading ? (
+            <div className="py-12 text-center text-slate-400 text-[12px]">
+              Loading reports from database...
+            </div>
+          ) : reportsList.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-[12px]">
               No reports generated yet for this audit. Click Generate Report to create one.
             </div>
@@ -3445,12 +3404,12 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                     </button>
                     <p className="mt-1 text-[10px] text-slate-400">
                       <span className="font-mono font-semibold text-slate-600">{item.id}</span> ·{" "}
-                      {item.type} · Generated: {item.generatedDate} · Size: {item.size}
+                      {item.type} · Generated: {item.generated_date} · Size: {item.size}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700">
                     {item.status}
                   </span>
@@ -3460,7 +3419,23 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                     className="flex h-7 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
                   >
                     <Eye className="h-3 w-3" />
-                    Preview Report
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(item)}
+                    className="flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                    title="Download Report JSON"
+                  >
+                    <Download className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReport(item.id)}
+                    className="flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-[10px] font-medium text-red-600 hover:bg-red-50"
+                    title="Delete Report"
+                  >
+                    <X className="h-3 w-3" />
                   </button>
                 </div>
               </div>
@@ -3511,7 +3486,7 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 </label>
                 <select
                   value={formType}
-                  onChange={(e) => setFormType(e.target.value as ReportItem["type"])}
+                  onChange={(e) => setFormType(e.target.value)}
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-[12px] outline-none focus:border-blue-500"
                 >
                   <option value="Audit Report">Comprehensive Audit Report</option>
@@ -3530,19 +3505,21 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 <p>• Risk assessment register & mitigation roadmap</p>
               </div>
 
-              <div className="flex items-center justifynd gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={generating}
                   onClick={() => setShowGenerateModal(false)}
-                  className="h-8 rounded-md border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                  className="h-8 rounded-md border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="h-8 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white hover:bg-blue-700"
+                  disabled={generating}
+                  className="h-8 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  Generate & Compile
+                  {generating ? "Synthesizing Data..." : "Generate & Compile"}
                 </button>
               </div>
             </form>
@@ -3563,8 +3540,8 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                   {selectedReport.name}
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  {selectedReport.framework} · Generated on {selectedReport.generatedDate} by{" "}
-                  {selectedReport.generatedBy}
+                  {selectedReport.framework} · Generated on {selectedReport.generated_date} by{" "}
+                  {selectedReport.generated_by}
                 </p>
               </div>
               <button
@@ -3583,10 +3560,13 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                   Executive Overview
                 </h4>
                 <p className="mt-2 leading-relaxed text-slate-600">
-                  This report documents the assessment of the organization&apos;s Information
-                  Security Management System against {audit.framework} requirements. The overall audit
-                  completion stands at <strong>{audit.progress}%</strong> with{" "}
-                  <strong>{audit.controls}</strong> controls evaluated.
+                  {selectedReport.content?.executiveSummary || (
+                    <>
+                      This report documents the assessment of the organization&apos;s Information
+                      Security Management System against {selectedReport.framework} requirements. The overall audit
+                      completion stands at <strong>{audit.progress}%</strong>.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -3594,18 +3574,28 @@ function ReportsPanel({ audit }: { audit: Audit }) {
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Controls Evaluated</span>
-                  <p className="text-[16px] font-semibold text-slate-900">{audit.controls}</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">Compliant: ~65%</p>
+                  <p className="text-[16px] font-semibold text-slate-900">
+                    {selectedReport.summary_stats?.controlsCount ?? audit.controls}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">
+                    Compliant: {selectedReport.summary_stats?.compliantCount ?? 0}
+                  </p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Evidence Collected</span>
-                  <p className="text-[16px] font-semibold text-slate-900">{audit.evidence}</p>
+                  <p className="text-[16px] font-semibold text-slate-900">
+                    {selectedReport.summary_stats?.evidenceCount ?? audit.evidence}
+                  </p>
                   <p className="text-[10px] text-blue-600 mt-0.5">Verified artifacts</p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <span className="text-[10px] font-medium uppercase text-slate-400">Active Findings</span>
-                  <p className="text-[16px] font-semibold text-orange-600">{audit.findings}</p>
-                  <p className="text-[10px] text-red-600 mt-0.5">Risks: {audit.risks}</p>
+                  <p className="text-[16px] font-semibold text-orange-600">
+                    {selectedReport.summary_stats?.findingsCount ?? audit.findings}
+                  </p>
+                  <p className="text-[10px] text-red-600 mt-0.5">
+                    Risks: {selectedReport.summary_stats?.risksCount ?? audit.risks}
+                  </p>
                 </div>
               </div>
 
@@ -3614,22 +3604,28 @@ function ReportsPanel({ audit }: { audit: Audit }) {
                 <h4 className="text-[13px] font-semibold text-slate-900">
                   Scope Boundaries
                 </h4>
-                <p className="mt-1 text-slate-600">{audit.scope}</p>
+                <p className="mt-1 text-slate-600">
+                  {selectedReport.content?.scope || audit.scope}
+                </p>
               </div>
 
-              {/* Remediation Summary */}
+              {/* Remediation & Conclusion */}
               <div className="rounded-lg border border-slate-200 p-4">
                 <h4 className="text-[13px] font-semibold text-slate-900">
-                  Remediation Roadmap
+                  Conclusion & Remediation Roadmap
                 </h4>
-                <p className="mt-1 text-slate-600">
-                  Corrective action plans have been defined for all high and critical severity
-                  findings, scheduled to conclude by {audit.dueDate}.
+                <p className="mt-1 leading-relaxed text-slate-600">
+                  {selectedReport.content?.conclusion || (
+                    <>
+                      Corrective action plans have been defined for all high and critical severity
+                      findings, scheduled to conclude by {audit.dueDate}.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 flex justifynd gap-2 border-t border-slate-100 pt-4">
+            <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
               <button
                 type="button"
                 onClick={() => setSelectedReport(null)}
@@ -3639,11 +3635,11 @@ function ReportsPanel({ audit }: { audit: Audit }) {
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedReport(null)}
+                onClick={() => handleDownload(selectedReport)}
                 className="flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white hover:bg-blue-700"
               >
                 <Download className="h-3.5 w-3.5" />
-                Download Report Package
+                Download Report Package (JSON)
               </button>
             </div>
           </div>

@@ -12,7 +12,7 @@ export type AuditLifecycleStatus =
   | "Reporting"
   | "Completed";
 
-export const VALID_AUDIT_STATUSES: readonly AuditLifecycleStatus[] = [
+const VALID_AUDIT_STATUSES: readonly AuditLifecycleStatus[] = [
   "Planning",
   "Fieldwork",
   "Review",

@@ -12,7 +12,7 @@ export type EvidenceStatus =
   | "Accepted"
   | "Rejected";
 
-export const VALID_EVIDENCE_STATUSES: readonly EvidenceStatus[] = [
+const VALID_EVIDENCE_STATUSES: readonly EvidenceStatus[] = [
   "Requested",
   "Submitted",
   "Under Review",

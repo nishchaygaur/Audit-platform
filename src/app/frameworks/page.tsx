@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookOpenCheck,
   Check,
@@ -15,8 +15,17 @@ import {
   Search,
   ShieldCheck,
   X,
+  Loader2,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import {
+  getFrameworks,
+  createFramework,
+  updateFramework,
+  deleteFramework as deleteFrameworkAction,
+  getControls,
+  createControl,
+} from "@/actions/frameworks";
 
 type FrameworkStatus = "Active" | "Available";
 
@@ -41,267 +50,14 @@ type Control = {
   status: "Mapped" | "Unmapped";
 };
 
-const initialFrameworks: Framework[] = [
-  {
-    id: "iso-27001",
-    name: "ISO/IEC 27001:2022",
-    shortName: "ISO 27001",
-    description:
-      "Information security management system requirements and control framework.",
-    controls: 93,
-    mapped: 78,
-    audits: 4,
-    status: "Active",
-    category: "Information Security",
-    version: "2022",
-  },
-  {
-    id: "nist-csf",
-    name: "NIST Cybersecurity Framework",
-    shortName: "NIST CSF",
-    description:
-      "Framework for managing and reducing cybersecurity risk across an organization.",
-    controls: 106,
-    mapped: 64,
-    audits: 3,
-    status: "Active",
-    category: "Cybersecurity",
-    version: "2.0",
-  },
-  {
-    id: "nist-rmf",
-    name: "NIST Risk Management Framework",
-    shortName: "NIST RMF",
-    description:
-      "Structured process for managing security and privacy risk throughout system lifecycles.",
-    controls: 325,
-    mapped: 42,
-    audits: 2,
-    status: "Active",
-    category: "Risk Management",
-    version: "Rev. 5",
-  },
-  {
-    id: "soc2",
-    name: "SOC 2",
-    shortName: "SOC 2",
-    description:
-      "Trust Services Criteria covering security, availability, processing integrity, confidentiality and privacy.",
-    controls: 64,
-    mapped: 31,
-    audits: 1,
-    status: "Active",
-    category: "Assurance",
-    version: "2023",
-  },
-  {
-    id: "cis",
-    name: "CIS Controls",
-    shortName: "CIS Controls",
-    description:
-      "Prioritized safeguards for defending systems and data against common cyber threats.",
-    controls: 153,
-    mapped: 0,
-    audits: 0,
-    status: "Available",
-    category: "Cybersecurity",
-    version: "v8.1",
-  },
-  {
-    id: "pci",
-    name: "PCI DSS",
-    shortName: "PCI DSS",
-    description:
-      "Security standard for organizations that store, process or transmit payment card data.",
-    controls: 64,
-    mapped: 0,
-    audits: 0,
-    status: "Available",
-    category: "Compliance",
-    version: "4.0.1",
-  },
-];
-
-const controlsByFramework: Record<string, Control[]> = {
-  "iso-27001": [
-    {
-      id: "A.5.1",
-      title: "Policies for information security",
-      description:
-        "Information security policies and supporting topic-specific policies shall be defined and reviewed.",
-      domain: "Organizational Controls",
-      status: "Mapped",
-    },
-    {
-      id: "A.5.2",
-      title: "Information security roles and responsibilities",
-      description:
-        "Information security roles and responsibilities shall be defined and allocated.",
-      domain: "Organizational Controls",
-      status: "Mapped",
-    },
-    {
-      id: "A.6.1",
-      title: "Screening",
-      description:
-        "Background verification checks shall be carried out for candidates before joining.",
-      domain: "People Controls",
-      status: "Mapped",
-    },
-    {
-      id: "A.8.2",
-      title: "Information access restriction",
-      description:
-        "Access to information and other associated assets shall be restricted.",
-      domain: "Technological Controls",
-      status: "Mapped",
-    },
-    {
-      id: "A.8.9",
-      title: "Configuration management",
-      description:
-        "Configurations of hardware, software, services and networks shall be established and managed.",
-      domain: "Technological Controls",
-      status: "Unmapped",
-    },
-  ],
-  "nist-csf": [
-    {
-      id: "GV.OC-01",
-      title: "Organizational context",
-      description:
-        "The organizational mission is understood and informs cybersecurity risk management.",
-      domain: "Govern",
-      status: "Mapped",
-    },
-    {
-      id: "ID.AM-01",
-      title: "Assets are inventoried",
-      description:
-        "Inventories of hardware managed by the organization are maintained.",
-      domain: "Identify",
-      status: "Mapped",
-    },
-    {
-      id: "PR.AA-01",
-      title: "Identities and credentials",
-      description:
-        "Identities and credentials for authorized users, services and hardware are managed.",
-      domain: "Protect",
-      status: "Mapped",
-    },
-    {
-      id: "DE.CM-01",
-      title: "Networks are monitored",
-      description:
-        "Networks and network services are monitored to find potentially adverse events.",
-      domain: "Detect",
-      status: "Unmapped",
-    },
-  ],
-  "nist-rmf": [
-    {
-      id: "RMF-1",
-      title: "Prepare",
-      description:
-        "Activities prepare the organization and system for managing security and privacy risk.",
-      domain: "Prepare",
-      status: "Mapped",
-    },
-    {
-      id: "RMF-2",
-      title: "Categorize",
-      description:
-        "Information systems and information are categorized based on impact analysis.",
-      domain: "Categorize",
-      status: "Mapped",
-    },
-    {
-      id: "RMF-3",
-      title: "Select",
-      description:
-        "Security and privacy controls are selected and tailored based on risk.",
-      domain: "Select",
-      status: "Mapped",
-    },
-    {
-      id: "RMF-4",
-      title: "Implement",
-      description:
-        "Selected controls are implemented and documented.",
-      domain: "Implement",
-      status: "Unmapped",
-    },
-  ],
-  soc2: [
-    {
-      id: "CC1.1",
-      title: "Control environment",
-      description:
-        "The entity demonstrates a commitment to integrity and ethical values.",
-      domain: "Common Criteria",
-      status: "Mapped",
-    },
-    {
-      id: "CC2.1",
-      title: "Communication and information",
-      description:
-        "Relevant information is communicated to support internal control responsibilities.",
-      domain: "Common Criteria",
-      status: "Mapped",
-    },
-    {
-      id: "CC6.1",
-      title: "Logical and physical access controls",
-      description:
-        "Logical and physical access security controls are implemented.",
-      domain: "Common Criteria",
-      status: "Unmapped",
-    },
-  ],
-  cis: [
-    {
-      id: "CIS-01",
-      title: "Inventory and control of enterprise assets",
-      description:
-        "Enterprise assets are actively inventoried and controlled.",
-      domain: "Asset Management",
-      status: "Unmapped",
-    },
-    {
-      id: "CIS-02",
-      title: "Inventory and control of software assets",
-      description:
-        "Software assets are inventoried and managed.",
-      domain: "Asset Management",
-      status: "Unmapped",
-    },
-  ],
-  pci: [
-    {
-      id: "PCI-1",
-      title: "Install and maintain network security controls",
-      description:
-        "Network security controls are established and maintained.",
-      domain: "Network Security",
-      status: "Unmapped",
-    },
-    {
-      id: "PCI-7",
-      title: "Restrict access to system components",
-      description:
-        "Access to system components and cardholder data is restricted.",
-      domain: "Access Control",
-      status: "Unmapped",
-    },
-  ],
-};
-
 export default function FrameworksPage() {
   const { currentWorkspace } = useWorkspace();
 
-  const [frameworks, setFrameworks] =
-    useState<Framework[]>(initialFrameworks);
+  const [frameworks, setFrameworks] = useState<Framework[]>([]);
+  const [controlsByFramework, setControlsByFramework] = useState<
+    Record<string, Control[]>
+  >({});
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -333,6 +89,51 @@ export default function FrameworksPage() {
     domain: "",
     description: "",
   });
+
+  const loadData = async () => {
+    if (!currentWorkspace?.id) return;
+    setLoading(true);
+    const res = await getFrameworks(currentWorkspace.id);
+    if (res.success && res.data) {
+      setFrameworks(
+        res.data.map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          shortName: f.short_name,
+          description: f.description,
+          controls: f.controls_count || 0,
+          mapped: f.mapped_count || 0,
+          audits: f.audits_count || 0,
+          status: f.status,
+          category: f.category,
+          version: f.version,
+        }))
+      );
+    }
+
+    const cRes = await getControls(currentWorkspace.id);
+    if (cRes.success && cRes.data) {
+      const grouped: Record<string, Control[]> = {};
+      for (const c of cRes.data) {
+        if (!grouped[c.framework_id]) {
+          grouped[c.framework_id] = [];
+        }
+        grouped[c.framework_id].push({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          domain: c.domain,
+          status: c.status,
+        });
+      }
+      setControlsByFramework(grouped);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [currentWorkspace?.id]);
 
   const filteredFrameworks = useMemo(() => {
     return frameworks.filter((framework) => {
@@ -368,25 +169,25 @@ export default function FrameworksPage() {
 
   const controlLibraries = frameworks.length;
 
-  function toggleFrameworkStatus(id: string) {
-    setFrameworks((current) =>
-      current.map((framework) =>
-        framework.id === id
-          ? {
-              ...framework,
-              status:
-                framework.status === "Active"
-                  ? "Available"
-                  : "Active",
-            }
-          : framework
-      )
-    );
+  async function toggleFrameworkStatus(id: string) {
+    const fw = frameworks.find((f) => f.id === id);
+    if (!fw) return;
+    const nextStatus: FrameworkStatus =
+      fw.status === "Active" ? "Available" : "Active";
 
+    const res = await updateFramework(currentWorkspace.id, id, {
+      status: nextStatus,
+    });
+    if (!res.success) {
+      alert(res.error || "Failed to update framework status");
+      return;
+    }
+
+    await loadData();
     setMenuFramework(null);
   }
 
-  function deleteFramework(id: string) {
+  async function deleteFramework(id: string) {
     const framework = frameworks.find(
       (item) => item.id === id
     );
@@ -399,10 +200,13 @@ export default function FrameworksPage() {
 
     if (!confirmed) return;
 
-    setFrameworks((current) =>
-      current.filter((item) => item.id !== id)
-    );
+    const res = await deleteFrameworkAction(currentWorkspace.id, id);
+    if (!res.success) {
+      alert(res.error || "Cannot delete framework");
+      return;
+    }
 
+    await loadData();
     setMenuFramework(null);
 
     if (selectedFramework?.id === id) {
@@ -410,7 +214,7 @@ export default function FrameworksPage() {
     }
   }
 
-  function addFramework() {
+  async function addFramework() {
     if (
       !newFramework.name.trim() ||
       !newFramework.shortName.trim() ||
@@ -419,15 +223,7 @@ export default function FrameworksPage() {
       return;
     }
 
-    const id =
-      newFramework.shortName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-") +
-      "-" +
-      Date.now();
-
-    const framework: Framework = {
-      id,
+    const res = await createFramework(currentWorkspace.id, {
       name: newFramework.name.trim(),
       shortName: newFramework.shortName.trim(),
       version: newFramework.version.trim(),
@@ -435,17 +231,15 @@ export default function FrameworksPage() {
       description:
         newFramework.description.trim() ||
         "Custom compliance framework added to the workspace.",
-      controls: 0,
-      mapped: 0,
-      audits: 0,
       status: "Available",
-    };
+    });
 
-    setFrameworks((current) => [
-      ...current,
-      framework,
-    ]);
+    if (!res.success) {
+      alert(res.error || "Failed to create framework");
+      return;
+    }
 
+    await loadData();
     setNewFramework({
       name: "",
       shortName: "",
@@ -457,7 +251,7 @@ export default function FrameworksPage() {
     setShowAddModal(false);
   }
 
-  function addControl() {
+  async function addControl() {
     if (
       !selectedFramework ||
       !newControl.id.trim() ||
@@ -466,46 +260,25 @@ export default function FrameworksPage() {
       return;
     }
 
-    const frameworkId = selectedFramework.id;
-
-    const currentControls =
-      controlsByFramework[frameworkId] ?? [];
-
-    const control: Control = {
+    const res = await createControl(currentWorkspace.id, {
       id: newControl.id.trim(),
+      frameworkId: selectedFramework.id,
+      frameworkName: selectedFramework.name,
+      frameworkShort: selectedFramework.shortName,
       title: newControl.title.trim(),
-      domain:
-        newControl.domain.trim() || "General Controls",
+      domain: newControl.domain.trim() || "General Controls",
       description:
         newControl.description.trim() ||
         "Control requirement added to the framework library.",
       status: "Unmapped",
-    };
+    });
 
-    controlsByFramework[frameworkId] = [
-      ...currentControls,
-      control,
-    ];
+    if (!res.success) {
+      alert(res.error || "Failed to add control");
+      return;
+    }
 
-    setFrameworks((current) =>
-      current.map((framework) =>
-        framework.id === frameworkId
-          ? {
-              ...framework,
-              controls: framework.controls + 1,
-            }
-          : framework
-      )
-    );
-
-    setSelectedFramework((current) =>
-      current
-        ? {
-            ...current,
-            controls: current.controls + 1,
-          }
-        : current
-    );
+    await loadData();
 
     setNewControl({
       id: "",

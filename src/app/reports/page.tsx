@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
@@ -20,163 +20,15 @@ import {
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAudits } from "@/context/AuditContext";
+import {
+  getReports,
+  generateReport as generateReportAction,
+  deleteReport as deleteReportAction,
+  type ReportRecord,
+} from "@/actions/reports";
 
 type ReportStatus = "Completed" | "Generating" | "Failed";
-
-type Report = {
-  id: string;
-  name: string;
-  type: string;
-  framework: string;
-  audit: string;
-  generatedBy: string;
-  generatedDate: string;
-  size: string;
-  status: ReportStatus;
-};
-
-const reportsByWorkspace: Record<string, Report[]> = {
-  "abc-technologies": [
-    {
-      id: "RPT-001",
-      name: "ISO 27001 Internal Audit Report",
-      type: "Audit Report",
-      framework: "ISO 27001",
-      audit: "AUD-2024-001",
-      generatedBy: "Admin",
-      generatedDate: "05 Sep 2026",
-      size: "2.4 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-002",
-      name: "NIST CSF Compliance Report",
-      type: "Compliance Report",
-      framework: "NIST CSF",
-      audit: "AUD-2024-001",
-      generatedBy: "Admin",
-      generatedDate: "04 Sep 2026",
-      size: "1.8 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-003",
-      name: "Risk Register Summary",
-      type: "Risk Report",
-      framework: "Enterprise",
-      audit: "—",
-      generatedBy: "Security Team",
-      generatedDate: "03 Sep 2026",
-      size: "1.1 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-004",
-      name: "Executive Audit Summary",
-      type: "Executive Summary",
-      framework: "ISO 27001",
-      audit: "AUD-2024-001",
-      generatedBy: "Admin",
-      generatedDate: "02 Sep 2026",
-      size: "890 KB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-005",
-      name: "Remediation Status Report",
-      type: "Remediation Report",
-      framework: "Multiple",
-      audit: "—",
-      generatedBy: "Compliance Team",
-      generatedDate: "01 Sep 2026",
-      size: "1.3 MB",
-      status: "Completed",
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: "RPT-101",
-      name: "ISO 27001 Compliance Assessment",
-      type: "Compliance Report",
-      framework: "ISO 27001",
-      audit: "AUD-2024-002",
-      generatedBy: "Admin",
-      generatedDate: "05 Sep 2026",
-      size: "2.1 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-102",
-      name: "NIST RMF Assessment Report",
-      type: "Audit Report",
-      framework: "NIST RMF",
-      audit: "AUD-2024-002",
-      generatedBy: "Audit Team",
-      generatedDate: "03 Sep 2026",
-      size: "2.7 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-103",
-      name: "Enterprise Risk Overview",
-      type: "Risk Report",
-      framework: "Enterprise",
-      audit: "—",
-      generatedBy: "Risk Team",
-      generatedDate: "02 Sep 2026",
-      size: "1.4 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-104",
-      name: "Audit Findings Report",
-      type: "Audit Report",
-      framework: "NIST RMF",
-      audit: "AUD-2024-002",
-      generatedBy: "Admin",
-      generatedDate: "01 Sep 2026",
-      size: "1.9 MB",
-      status: "Completed",
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: "RPT-201",
-      name: "Healthcare Security Audit Report",
-      type: "Audit Report",
-      framework: "ISO 27001",
-      audit: "AUD-2024-003",
-      generatedBy: "Admin",
-      generatedDate: "05 Sep 2026",
-      size: "2.6 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-202",
-      name: "NIST CSF Assessment",
-      type: "Compliance Report",
-      framework: "NIST CSF",
-      audit: "AUD-2024-003",
-      generatedBy: "Audit Team",
-      generatedDate: "04 Sep 2026",
-      size: "2.2 MB",
-      status: "Completed",
-    },
-    {
-      id: "RPT-203",
-      name: "Risk Treatment Report",
-      type: "Risk Report",
-      framework: "Enterprise",
-      audit: "—",
-      generatedBy: "Risk Team",
-      generatedDate: "02 Sep 2026",
-      size: "1.2 MB",
-      status: "Completed",
-    },
-  ],
-};
 
 const reportTypes = [
   "Audit Report",
@@ -255,23 +107,44 @@ function StatCard({
 
 export default function ReportsPage() {
   const { currentWorkspace } = useWorkspace();
+  const { audits } = useAudits();
 
-  const workspaceId = currentWorkspace?.id ?? "abc-technologies";
-
-  const [reports, setReports] = useState<Report[]>(
-    reportsByWorkspace[workspaceId] ?? reportsByWorkspace["abc-technologies"]
-  );
+  const [reports, setReports] = useState<ReportRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
 
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ReportRecord | null>(null);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   const [newReportName, setNewReportName] = useState("");
   const [newReportType, setNewReportType] = useState("Audit Report");
   const [newFramework, setNewFramework] = useState("ISO 27001");
+  const [selectedAuditId, setSelectedAuditId] = useState<string>("");
+
+  useEffect(() => {
+    if (audits.length > 0 && !selectedAuditId) {
+      setSelectedAuditId(audits[0].id);
+      setNewFramework(audits[0].framework || "ISO 27001");
+    }
+  }, [audits, selectedAuditId]);
+
+  const loadReports = useCallback(async () => {
+    if (!currentWorkspace?.id) return;
+    setLoading(true);
+    const res = await getReports(currentWorkspace.id);
+    if (res.success && res.data) {
+      setReports(res.data);
+    }
+    setLoading(false);
+  }, [currentWorkspace?.id]);
+
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
 
   const filteredReports = useMemo(() => {
     return reports.filter((report) => {
@@ -299,63 +172,71 @@ export default function ReportsPage() {
     (report) => report.status === "Generating"
   ).length;
 
-  const thisMonthCount = reports.filter((report) =>
-    report.generatedDate.includes("Sep 2026")
-  ).length;
+  const thisMonthCount = reports.filter((report) => {
+    if (!report.generated_date) return false;
+    return (
+      report.generated_date.includes("2026") ||
+      report.generated_date.includes("Just now") ||
+      report.generated_date.includes("2024")
+    );
+  }).length;
 
-  function generateReport() {
-    if (!newReportName.trim()) return;
+  async function handleGenerateReport() {
+    if (!newReportName.trim() || !currentWorkspace?.id) return;
 
-    const id = `RPT-${Math.floor(1000 + Math.random() * 9000)}`;
+    const targetAuditId = selectedAuditId || audits[0]?.id;
+    if (!targetAuditId) {
+      alert("Please select or create an audit first before generating a report.");
+      return;
+    }
 
-    const newReport: Report = {
-      id,
-      name: newReportName.trim(),
-      type: newReportType,
-      framework: newFramework,
-      audit: "—",
-      generatedBy: "Current User",
-      generatedDate: "05 Sep 2026",
-      size: "Generating...",
-      status: "Generating",
-    };
+    setGenerating(true);
+    const res = await generateReportAction(
+      currentWorkspace.id,
+      targetAuditId,
+      newReportType,
+      newReportName.trim()
+    );
+    setGenerating(false);
 
-    setReports((current) => [newReport, ...current]);
-    setShowGenerateModal(false);
-
-    setNewReportName("");
-    setNewReportType("Audit Report");
-    setNewFramework("ISO 27001");
-
-    setTimeout(() => {
-      setReports((current) =>
-        current.map((report) =>
-          report.id === id
-            ? {
-                ...report,
-                status: "Completed",
-                size: "1.6 MB",
-              }
-            : report
-        )
-      );
-    }, 1800);
-  }
-
-  function deleteReport(id: string) {
-    setReports((current) => current.filter((report) => report.id !== id));
-
-    if (selectedReport?.id === id) {
-      setSelectedReport(null);
+    if (res.success && res.data) {
+      setShowGenerateModal(false);
+      setNewReportName("");
+      await loadReports();
+      setSelectedReport(res.data);
+    } else {
+      alert(res.error || "Failed to generate report");
     }
   }
 
-  function downloadReport(report: Report) {
-    if (report.status !== "Completed") return;
+  async function handleDeleteReport(id: string) {
+    if (!currentWorkspace?.id) return;
+    if (!confirm("Are you sure you want to delete this report?")) return;
 
-    window.alert(
-      `Report "${report.name}" is ready for download.\n\nFile size: ${report.size}`
+    const res = await deleteReportAction(currentWorkspace.id, id);
+    if (res.success) {
+      if (selectedReport?.id === id) {
+        setSelectedReport(null);
+      }
+      await loadReports();
+    } else {
+      alert(res.error || "Failed to delete report");
+    }
+  }
+
+  function handleDownloadReport(report: ReportRecord) {
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(report, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", jsonString);
+    downloadAnchor.setAttribute(
+      "download",
+      `${report.id}_${report.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.json`
     );
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   }
 
   return (
@@ -505,7 +386,7 @@ export default function ReportsPage() {
 
                     <ChevronDown
                       size={15}
-                      className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
                   </div>
 
@@ -525,7 +406,7 @@ export default function ReportsPage() {
 
                     <ChevronDown
                       size={15}
-                      className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
                   </div>
                 </div>
@@ -562,7 +443,16 @@ export default function ReportsPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {filteredReports.length === 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-5 py-14 text-center text-sm text-slate-500"
+                      >
+                        Loading reports from database...
+                      </td>
+                    </tr>
+                  ) : filteredReports.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -609,24 +499,24 @@ export default function ReportsPage() {
                         </td>
 
                         <td className="px-5 py-4 text-sm text-slate-600">
-                          {report.audit}
+                          {report.audit_name || report.audit_id || "—"}
                         </td>
 
                         <td className="px-5 py-4">
                           <p className="text-sm text-slate-700">
-                            {report.generatedDate}
+                            {report.generated_date}
                           </p>
                           <p className="mt-0.5 text-xs text-slate-400">
-                            {report.generatedBy}
+                            {report.generated_by}
                           </p>
                         </td>
 
                         <td className="px-5 py-4">
-                          <StatusBadge status={report.status} />
+                          <StatusBadge status={report.status as ReportStatus} />
                         </td>
 
                         <td className="px-5 py-4">
-                          <div className="flex justifynd gap-1">
+                          <div className="flex justify-end gap-1">
                             <button
                               onClick={() => setSelectedReport(report)}
                               className="rounded-md px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100"
@@ -635,16 +525,16 @@ export default function ReportsPage() {
                             </button>
 
                             <button
-                              onClick={() => downloadReport(report)}
+                              onClick={() => handleDownloadReport(report)}
                               disabled={report.status !== "Completed"}
                               className="rounded-md p-2 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
-                              title="Download"
+                              title="Download JSON"
                             >
                               <Download size={16} />
                             </button>
 
                             <button
-                              onClick={() => deleteReport(report.id)}
+                              onClick={() => handleDeleteReport(report.id)}
                               className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
                               title="Delete"
                             >
@@ -678,7 +568,7 @@ export default function ReportsPage() {
                   Generate Report
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Create a new workspace report
+                  Create a new workspace report synthesized from PostgreSQL
                 </p>
               </div>
 
@@ -706,6 +596,35 @@ export default function ReportsPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Associated Audit
+                </label>
+
+                <div className="relative">
+                  <select
+                    value={selectedAuditId}
+                    onChange={(event) => {
+                      setSelectedAuditId(event.target.value);
+                      const aud = audits.find((a) => a.id === event.target.value);
+                      if (aud?.framework) setNewFramework(aud.framework);
+                    }}
+                    className="h-11 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-sm outline-none focus:border-slate-400"
+                  >
+                    {audits.map((audit) => (
+                      <option key={audit.id} value={audit.id}>
+                        {audit.name} ({audit.framework})
+                      </option>
+                    ))}
+                  </select>
+
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
                   Report Type
                 </label>
 
@@ -722,7 +641,7 @@ export default function ReportsPage() {
 
                   <ChevronDown
                     size={16}
-                    className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
                 </div>
               </div>
@@ -745,13 +664,13 @@ export default function ReportsPage() {
 
                   <ChevronDown
                     size={16}
-                    className="pointervents-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => setShowGenerateModal(false)}
                 className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
@@ -760,12 +679,12 @@ export default function ReportsPage() {
               </button>
 
               <button
-                onClick={generateReport}
-                disabled={!newReportName.trim()}
+                onClick={handleGenerateReport}
+                disabled={generating || !newReportName.trim()}
                 className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <FileBarChart2 size={16} />
-                Generate
+                {generating ? "Synthesizing Data..." : "Generate"}
               </button>
             </div>
           </div>
@@ -824,7 +743,7 @@ export default function ReportsPage() {
                   Audit
                 </p>
                 <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.audit}
+                  {selectedReport.audit_name || selectedReport.audit_id || "—"}
                 </p>
               </div>
 
@@ -833,7 +752,7 @@ export default function ReportsPage() {
                   Status
                 </p>
                 <div className="mt-2">
-                  <StatusBadge status={selectedReport.status} />
+                  <StatusBadge status={selectedReport.status as ReportStatus} />
                 </div>
               </div>
 
@@ -842,7 +761,7 @@ export default function ReportsPage() {
                   Generated By
                 </p>
                 <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.generatedBy}
+                  {selectedReport.generated_by}
                 </p>
               </div>
 
@@ -856,9 +775,9 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
-                onClick={() => deleteReport(selectedReport.id)}
+                onClick={() => handleDeleteReport(selectedReport.id)}
                 className="mr-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 <Trash2 size={16} />
@@ -873,12 +792,12 @@ export default function ReportsPage() {
               </button>
 
               <button
-                onClick={() => downloadReport(selectedReport)}
+                onClick={() => handleDownloadReport(selectedReport)}
                 disabled={selectedReport.status !== "Completed"}
                 className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Download size={16} />
-                Download
+                Download JSON
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookOpenCheck,
   Check,
@@ -14,8 +14,15 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   X,
+  Loader2,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import {
+  getControls,
+  createControl,
+  updateControl,
+  deleteControl,
+} from "@/actions/frameworks";
 
 type MappingStatus = "Mapped" | "Unmapped";
 
@@ -28,193 +35,6 @@ type Control = {
   description: string;
   status: MappingStatus;
   mappedFrameworks: string[];
-};
-
-const workspaceControls: Record<string, Control[]> = {
-  "abc-technologies": [
-    {
-      id: "ISO-A.5.1",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Policies for information security",
-      domain: "Organizational Controls",
-      description:
-        "Information security policies and supporting topic-specific policies shall be defined, approved, published and reviewed.",
-      status: "Mapped",
-      mappedFrameworks: ["NIST CSF", "SOC 2"],
-    },
-    {
-      id: "ISO-A.5.2",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Information security roles and responsibilities",
-      domain: "Organizational Controls",
-      description:
-        "Information security roles and responsibilities shall be defined and allocated according to organizational requirements.",
-      status: "Mapped",
-      mappedFrameworks: ["NIST CSF"],
-    },
-    {
-      id: "ISO-A.8.2",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Information access restriction",
-      domain: "Technological Controls",
-      description:
-        "Access to information and other associated assets shall be restricted in accordance with business and security requirements.",
-      status: "Mapped",
-      mappedFrameworks: ["NIST CSF", "SOC 2", "PCI DSS"],
-    },
-    {
-      id: "ISO-A.8.9",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Configuration management",
-      domain: "Technological Controls",
-      description:
-        "Configurations of hardware, software, services and networks shall be established, documented and managed.",
-      status: "Unmapped",
-      mappedFrameworks: [],
-    },
-    {
-      id: "NIST-GV.OC-01",
-      framework: "NIST Cybersecurity Framework",
-      frameworkShort: "NIST CSF",
-      title: "Organizational context",
-      domain: "Govern",
-      description:
-        "The organizational mission and objectives are understood and inform cybersecurity risk management.",
-      status: "Mapped",
-      mappedFrameworks: ["ISO 27001"],
-    },
-    {
-      id: "NIST-ID.AM-01",
-      framework: "NIST Cybersecurity Framework",
-      frameworkShort: "NIST CSF",
-      title: "Assets are inventoried",
-      domain: "Identify",
-      description:
-        "Inventories of hardware managed by the organization are maintained.",
-      status: "Mapped",
-      mappedFrameworks: ["ISO 27001"],
-    },
-    {
-      id: "NIST-PR.AA-01",
-      framework: "NIST Cybersecurity Framework",
-      frameworkShort: "NIST CSF",
-      title: "Identities and credentials",
-      domain: "Protect",
-      description:
-        "Identities and credentials for authorized users, services and hardware are managed by the organization.",
-      status: "Unmapped",
-      mappedFrameworks: [],
-    },
-    {
-      id: "SOC-CC1.1",
-      framework: "SOC 2",
-      frameworkShort: "SOC 2",
-      title: "Control environment",
-      domain: "Common Criteria",
-      description:
-        "The entity demonstrates a commitment to integrity and ethical values.",
-      status: "Mapped",
-      mappedFrameworks: ["ISO 27001"],
-    },
-  ],
-
-  "xyz-finance": [
-    {
-      id: "ISO-A.5.1",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Policies for information security",
-      domain: "Organizational Controls",
-      description:
-        "Information security policies shall be defined, approved, published and reviewed.",
-      status: "Mapped",
-      mappedFrameworks: ["NIST CSF", "SOC 2"],
-    },
-    {
-      id: "ISO-A.8.2",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Information access restriction",
-      domain: "Technological Controls",
-      description:
-        "Access to information and associated assets shall be restricted according to requirements.",
-      status: "Mapped",
-      mappedFrameworks: ["NIST CSF", "PCI DSS"],
-    },
-    {
-      id: "PCI-7.1",
-      framework: "PCI DSS",
-      frameworkShort: "PCI DSS",
-      title: "Restrict access to system components",
-      domain: "Access Control",
-      description:
-        "Access to system components and cardholder data is restricted according to business need.",
-      status: "Mapped",
-      mappedFrameworks: ["ISO 27001"],
-    },
-    {
-      id: "NIST-PR.AA-01",
-      framework: "NIST Cybersecurity Framework",
-      frameworkShort: "NIST CSF",
-      title: "Identities and credentials",
-      domain: "Protect",
-      description:
-        "Identities and credentials for authorized users, services and hardware are managed.",
-      status: "Unmapped",
-      mappedFrameworks: [],
-    },
-  ],
-
-  "pqr-healthcare": [
-    {
-      id: "ISO-A.5.1",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Policies for information security",
-      domain: "Organizational Controls",
-      description:
-        "Information security policies shall be defined, approved, published and reviewed.",
-      status: "Mapped",
-      mappedFrameworks: ["NIST CSF"],
-    },
-    {
-      id: "ISO-A.6.1",
-      framework: "ISO/IEC 27001:2022",
-      frameworkShort: "ISO 27001",
-      title: "Screening",
-      domain: "People Controls",
-      description:
-        "Background verification checks shall be carried out for candidates before joining.",
-      status: "Mapped",
-      mappedFrameworks: [],
-    },
-    {
-      id: "NIST-ID.AM-01",
-      framework: "NIST Cybersecurity Framework",
-      frameworkShort: "NIST CSF",
-      title: "Assets are inventoried",
-      domain: "Identify",
-      description:
-        "Inventories of hardware managed by the organization are maintained.",
-      status: "Mapped",
-      mappedFrameworks: ["ISO 27001"],
-    },
-    {
-      id: "SOC-CC6.1",
-      framework: "SOC 2",
-      frameworkShort: "SOC 2",
-      title: "Logical and physical access controls",
-      domain: "Common Criteria",
-      description:
-        "Logical and physical access security controls are implemented and maintained.",
-      status: "Unmapped",
-      mappedFrameworks: [],
-    },
-  ],
 };
 
 const frameworkOptions = [
@@ -245,9 +65,8 @@ const domainOptions = [
 export default function ControlLibraryPage() {
   const { currentWorkspace } = useWorkspace();
 
-  const [controls, setControls] = useState<Control[]>(
-    workspaceControls[currentWorkspace.id] ?? []
-  );
+  const [controls, setControls] = useState<Control[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [frameworkFilter, setFrameworkFilter] =
@@ -279,6 +98,31 @@ export default function ControlLibraryPage() {
 
   const [mappingFramework, setMappingFramework] =
     useState("NIST CSF");
+
+  const loadControls = async () => {
+    if (!currentWorkspace?.id) return;
+    setLoading(true);
+    const res = await getControls(currentWorkspace.id);
+    if (res.success && res.data) {
+      setControls(
+        res.data.map((c: any) => ({
+          id: c.id,
+          framework: c.framework_name || c.framework_short || "ISO 27001",
+          frameworkShort: c.framework_short || "ISO 27001",
+          title: c.title,
+          domain: c.domain,
+          description: c.description,
+          status: c.status,
+          mappedFrameworks: c.mapped_frameworks || [],
+        }))
+      );
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadControls();
+  }, [currentWorkspace?.id]);
 
   const filteredControls = useMemo(() => {
     return controls.filter((control) => {
@@ -331,7 +175,7 @@ export default function ControlLibraryPage() {
     controls.map((control) => control.frameworkShort)
   ).size;
 
-  function addControl() {
+  async function addControl() {
     if (
       !newControl.id.trim() ||
       !newControl.title.trim()
@@ -339,15 +183,18 @@ export default function ControlLibraryPage() {
       return;
     }
 
+    const frameworkShort = newControl.framework;
     const frameworkName =
       newControl.framework === "ISO 27001"
         ? "ISO/IEC 27001:2022"
         : newControl.framework;
+    const frameworkId = frameworkShort.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-    const control: Control = {
+    const res = await createControl(currentWorkspace.id, {
       id: newControl.id.trim(),
-      framework: frameworkName,
-      frameworkShort: newControl.framework,
+      frameworkId,
+      frameworkName,
+      frameworkShort,
       title: newControl.title.trim(),
       domain: newControl.domain,
       description:
@@ -355,12 +202,14 @@ export default function ControlLibraryPage() {
         "Control requirement added to the workspace control library.",
       status: "Unmapped",
       mappedFrameworks: [],
-    };
+    });
 
-    setControls((current) => [
-      control,
-      ...current,
-    ]);
+    if (!res.success) {
+      alert(res.error || "Failed to add control");
+      return;
+    }
+
+    await loadControls();
 
     setNewControl({
       id: "",
@@ -373,7 +222,7 @@ export default function ControlLibraryPage() {
     setShowAddModal(false);
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (
       !editingControl ||
       !editingControl.id.trim() ||
@@ -382,93 +231,74 @@ export default function ControlLibraryPage() {
       return;
     }
 
-    setControls((current) =>
-      current.map((control) =>
-        control.id === editingControl.id
-          ? editingControl
-          : control
-      )
-    );
+    const res = await updateControl(currentWorkspace.id, editingControl.id, {
+      title: editingControl.title.trim(),
+      domain: editingControl.domain,
+      description: editingControl.description.trim(),
+      status: editingControl.status,
+      mappedFrameworks: editingControl.mappedFrameworks,
+    });
 
+    if (!res.success) {
+      alert(res.error || "Failed to update control");
+      return;
+    }
+
+    await loadControls();
     setSelectedControl(editingControl);
     setEditingControl(null);
   }
 
-  function toggleMapping(
+  async function toggleMapping(
     controlId: string,
     framework: string
   ) {
-    setControls((current) =>
-      current.map((control) => {
-        if (control.id !== controlId) {
-          return control;
-        }
+    const control = controls.find((c) => c.id === controlId);
+    if (!control) return;
 
-        const exists =
-          control.mappedFrameworks.includes(
-            framework
-          );
+    const exists = control.mappedFrameworks.includes(framework);
+    const mappedFrameworks = exists
+      ? control.mappedFrameworks.filter((item) => item !== framework)
+      : [...control.mappedFrameworks, framework];
+    const nextStatus: MappingStatus =
+      mappedFrameworks.length > 0 ? "Mapped" : "Unmapped";
 
-        const mappedFrameworks = exists
-          ? control.mappedFrameworks.filter(
-              (item) => item !== framework
-            )
-          : [
-              ...control.mappedFrameworks,
-              framework,
-            ];
+    const res = await updateControl(currentWorkspace.id, controlId, {
+      mappedFrameworks,
+      status: nextStatus,
+    });
 
-        return {
-          ...control,
-          mappedFrameworks,
-          status:
-            mappedFrameworks.length > 0
-              ? "Mapped"
-              : "Unmapped",
-        };
-      })
-    );
+    if (!res.success) {
+      alert(res.error || "Failed to update mapping");
+      return;
+    }
+
+    await loadControls();
 
     setSelectedControl((current) => {
-      if (!current || current.id !== controlId) {
-        return current;
-      }
-
-      const exists =
-        current.mappedFrameworks.includes(
-          framework
-        );
-
-      const mappedFrameworks = exists
-        ? current.mappedFrameworks.filter(
-            (item) => item !== framework
-          )
-        : [
-            ...current.mappedFrameworks,
-            framework,
-          ];
-
+      if (!current || current.id !== controlId) return current;
       return {
         ...current,
         mappedFrameworks,
-        status:
-          mappedFrameworks.length > 0
-            ? "Mapped"
-            : "Unmapped",
+        status: nextStatus,
       };
     });
   }
 
-  function deleteControl(id: string) {
+  async function handleDelete(id: string) {
     const confirmed = window.confirm(
       "Delete this control from the library?"
     );
 
     if (!confirmed) return;
 
-    setControls((current) =>
-      current.filter((control) => control.id !== id)
-    );
+    const res = await deleteControl(currentWorkspace.id, id);
+    if (!res.success) {
+      alert(res.error || "Failed to delete control");
+      return;
+    }
+
+    await loadControls();
 
     if (selectedControl?.id === id) {
       setSelectedControl(null);
@@ -793,7 +623,7 @@ export default function ControlLibraryPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              deleteControl(
+                              handleDelete(
                                 control.id
                               )
                             }
