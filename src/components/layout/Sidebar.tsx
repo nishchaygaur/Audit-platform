@@ -164,7 +164,7 @@ export default function Sidebar() {  const { user } = useAuth();
   }, []);
 
   // Hide sidebar on standalone auth or dedicated workspace selection screens
-  if (pathname === "/signin" || pathname === "/workspaces") {
+  if (pathname === "/signin" || pathname === "/workspaces" || pathname === "/reset-password") {
     return null;
   }
 

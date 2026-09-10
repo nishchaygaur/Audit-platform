@@ -1,45 +1,63 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
-
-const publicRoutes = ['/signin'];
-
-function getJwtKey(): Uint8Array | null {
-  const secret = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-audit-platform-jwt-secret-key-32-chars-min' : null);
-  if (!secret) return null;
-  return new TextEncoder().encode(secret);
-}
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
 
 export async function proxy(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-  const isPublicRoute = publicRoutes.includes(path);
-  
-  const cookie = request.cookies.get('audit_session')?.value;
-  let session = null;
-  
-  if (cookie) {
-    try {
-      const key = getJwtKey();
-      if (key) {
-        const { payload } = await jwtVerify(cookie, key, { algorithms: ['HS256'] });
-        session = payload;
-      }
-    } catch {
-      // invalid token
-    }
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'placeholder-key';
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const pathname = request.nextUrl.pathname;
+  const isPublicRoute =
+    pathname === '/signin' ||
+    pathname === '/reset-password' ||
+    pathname.startsWith('/auth/callback');
+
+  // Redirect unauthenticated or unverified users attempting to access protected routes
+  if ((!user || !user.email_confirmed_at) && !isPublicRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/signin';
+    return NextResponse.redirect(url);
   }
 
-  if (!session && !isPublicRoute) {
-    return NextResponse.redirect(new URL('/signin', request.url));
+  // Prevent authenticated & verified users from returning to /signin
+  if (user && user.email_confirmed_at && pathname === '/signin') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
 
-  if (session && isPublicRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
-  return NextResponse.next();
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg).*)'],
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

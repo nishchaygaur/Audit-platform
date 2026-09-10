@@ -108,10 +108,12 @@ export const POSTGRES_SCHEMA_SQL = `
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
+    password TEXT DEFAULT '',
     role TEXT NOT NULL DEFAULT 'Viewer',
+    supabase_user_id UUID UNIQUE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE INDEX IF NOT EXISTS idx_users_supabase_user_id ON users(supabase_user_id);
 
   CREATE TABLE IF NOT EXISTS password_resets (
     id TEXT PRIMARY KEY,
@@ -392,6 +394,13 @@ export async function ensureSchema(): Promise<void> {
         ALTER TABLE evidence ADD COLUMN IF NOT EXISTS storage_key TEXT DEFAULT '';
         ALTER TABLE evidence ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'application/octet-stream';
         ALTER TABLE evidence ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+      `).catch(() => {});
+      // Idempotent column migrations for users authentication mapping
+      await pool.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_user_id UUID UNIQUE;
+        ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+        ALTER TABLE users ALTER COLUMN password SET DEFAULT '';
+        CREATE INDEX IF NOT EXISTS idx_users_supabase_user_id ON users(supabase_user_id);
       `).catch(() => {});
       await seedBaselineData(pool);
     })().catch((err) => {

@@ -1,10 +1,9 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { ShieldCheck, Eye, EyeOff, Lock, Mail, User, X, CheckCircle2, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { signIn, signUp, requestPasswordReset, resetPasswordWithToken } from "@/actions/auth";
+import { signIn, signUp, requestPasswordReset } from "@/actions/auth";
 import { useAuth } from "@/context/AuthContext";
-import { useEffect } from "react";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -15,15 +14,13 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
   // Forgot password dialog state
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
-  const [resetToken, setResetToken] = useState("");
-  const [resetNewPassword, setResetNewPassword] = useState("");
-  const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
@@ -38,6 +35,7 @@ export default function SignInPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setInfoMessage("");
 
     if (!email.trim() || !password.trim() || (isSignUp && !name.trim())) {
       setError("Please fill in all required fields.");
@@ -48,6 +46,10 @@ export default function SignInPage() {
       const isGmail = /^[a-zA-Z0-9._%+-]+@(gmail\.com|googlemail\.com)$/i.test(email.trim());
       if (!isGmail) {
         setError("Registration requires a valid Gmail address (@gmail.com or @googlemail.com).");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters long.");
         return;
       }
     }
@@ -66,6 +68,13 @@ export default function SignInPage() {
     if (result?.error) {
       setError(result.error);
       setLoading(false);
+    } else if (result?.requiresVerification) {
+      setInfoMessage(
+        result.message ||
+          "Account created. Please check your email and verify your account before signing in."
+      );
+      setLoading(false);
+      setIsSignUp(false);
     } else {
       router.refresh();
       router.push("/workspaces");
@@ -84,47 +93,13 @@ export default function SignInPage() {
     const res = await requestPasswordReset(resetEmail.trim());
     setResetLoading(false);
     if (res.success) {
-      setResetMessage(res.message || "Reset code generated.");
-      if (res.token) {
-        setResetToken(res.token);
-      }
-      setResetStep(2);
+      setResetSuccess(true);
+      setResetMessage(
+        res.message ||
+          "If an account exists for this email, a password reset link has been sent. Please check your inbox."
+      );
     } else {
       setResetError(res.error || "Failed to request password reset.");
-    }
-  }
-
-  async function handleResetPassword(e: FormEvent) {
-    e.preventDefault();
-    setResetError("");
-    if (!resetToken.trim() || !resetNewPassword.trim()) {
-      setResetError("Please fill in both the reset code and new password.");
-      return;
-    }
-    if (resetNewPassword.length < 8) {
-      setResetError("New password must be at least 8 characters long.");
-      return;
-    }
-    setResetLoading(true);
-    const res = await resetPasswordWithToken(
-      resetEmail.trim(),
-      resetToken.trim(),
-      resetNewPassword.trim()
-    );
-    setResetLoading(false);
-    if (res.success) {
-      setResetSuccess(true);
-      setResetMessage("Password reset successfully! You can now sign in.");
-      setTimeout(() => {
-        setShowForgotModal(false);
-        setResetSuccess(false);
-        setResetStep(1);
-        setResetEmail("");
-        setResetToken("");
-        setResetNewPassword("");
-      }, 1500);
-    } else {
-      setResetError(res.error || "Failed to reset password.");
     }
   }
 
@@ -159,7 +134,7 @@ export default function SignInPage() {
         </div>
       </div>
       
-      {/* Sign in */}
+      {/* Sign in / Sign up form panel */}
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="w-full max-w-[410px]">
           <div className="mb-8 lg:hidden">
@@ -182,6 +157,15 @@ export default function SignInPage() {
               {isSignUp ? "Sign up to start your audit workspace." : "Sign in to continue to your audit workspace."}
             </p>
           </div>
+
+          {infoMessage && (
+            <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-3">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-blue-600" />
+                <p className="text-[12px] font-medium leading-5 text-blue-900">{infoMessage}</p>
+              </div>
+            </div>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name - only for sign up */}
@@ -207,7 +191,7 @@ export default function SignInPage() {
             {/* Email */}
             <div>
               <label className="mb-2 block text-[11px] font-medium text-slate-700">
-                Email address
+                Email address {isSignUp && <span className="text-slate-400 font-normal">(@gmail.com only)</span>}
               </label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -215,7 +199,7 @@ export default function SignInPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  placeholder="you@gmail.com"
                   autoComplete="email"
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-[13px] text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
@@ -225,7 +209,7 @@ export default function SignInPage() {
             {/* Password */}
             <div>
               <label className="mb-2 block text-[11px] font-medium text-slate-700">
-                Password
+                Password {isSignUp && <span className="text-slate-400 font-normal">(min 8 characters)</span>}
               </label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -233,8 +217,9 @@ export default function SignInPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={isSignUp ? "Create a password" : "Enter your password"}
+                  placeholder={isSignUp ? "Create a password (min 8 chars)" : "Enter your password"}
                   autoComplete={isSignUp ? "new-password" : "current-password"}
+                  minLength={isSignUp ? 8 : undefined}
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-11 text-[13px] text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
                 <button
@@ -263,9 +248,9 @@ export default function SignInPage() {
                   type="button"
                   onClick={() => {
                     setResetEmail(email || "");
-                    setResetStep(1);
                     setResetError("");
                     setResetMessage("");
+                    setResetSuccess(false);
                     setShowForgotModal(true);
                   }}
                   className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
@@ -296,6 +281,7 @@ export default function SignInPage() {
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError("");
+                setInfoMessage("");
               }}
               className="text-[12px] text-slate-500 hover:text-slate-800"
             >
@@ -320,10 +306,10 @@ export default function SignInPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">
-                    {resetStep === 1 ? "Reset your password" : "Enter Verification Code"}
+                    Reset your password
                   </h3>
                   <p className="text-xs text-slate-400">
-                    {resetStep === 1 ? "Enter your registered email address" : "Enter the code and your new password"}
+                    Enter your email to receive a password reset link
                   </p>
                 </div>
               </div>
@@ -338,14 +324,25 @@ export default function SignInPage() {
             </div>
 
             {resetSuccess ? (
-              <div className="py-6 text-center space-y-3">
+              <div className="py-6 text-center space-y-4">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                   <CheckCircle2 size={24} />
                 </div>
-                <h4 className="text-sm font-semibold text-slate-900">Password Reset Complete</h4>
-                <p className="text-xs text-slate-500">{resetMessage}</p>
+                <div className="space-y-1.5">
+                  <h4 className="text-sm font-semibold text-slate-900">Reset Link Sent</h4>
+                  <p className="text-xs text-slate-600 leading-relaxed max-w-xs mx-auto">
+                    {resetMessage}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  className="mt-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  Back to Sign In
+                </button>
               </div>
-            ) : resetStep === 1 ? (
+            ) : (
               <form onSubmit={handleRequestReset} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1.5">
@@ -384,85 +381,8 @@ export default function SignInPage() {
                     disabled={resetLoading}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {resetLoading ? "Checking..." : "Request Reset Code"}
+                    {resetLoading ? "Sending Link..." : "Send Reset Link"}
                   </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handleResetPassword} className="space-y-4">
-                {resetMessage && (
-                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
-                    {resetMessage}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                    6-Digit Verification Code
-                  </label>
-                  <input
-                    type="text"
-                    value={resetToken}
-                    onChange={(e) => setResetToken(e.target.value)}
-                    placeholder="e.g. 123456"
-                    required
-                    maxLength={10}
-                    className="h-10 w-full font-mono tracking-widest text-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                    New Password (min 8 characters)
-                  </label>
-                  <div className="relative">
-                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="password"
-                      value={resetNewPassword}
-                      onChange={(e) => setResetNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      minLength={8}
-                      className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                    />
-                  </div>
-                </div>
-
-                {resetError && (
-                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
-                    {resetError}
-                  </p>
-                )}
-
-                <div className="flex justify-between items-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResetStep(1);
-                      setResetError("");
-                    }}
-                    className="text-xs text-slate-500 hover:text-slate-800 underline"
-                  >
-                    Back to email
-                  </button>
-
-                  <div className="flex gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotModal(false)}
-                      className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={resetLoading}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {resetLoading ? "Updating..." : "Reset Password"}
-                    </button>
-                  </div>
                 </div>
               </form>
             )}
