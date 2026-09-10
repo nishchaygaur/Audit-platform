@@ -27,8 +27,43 @@ export default function SignInPage() {
   const [resetSuccess, setResetSuccess] = useState(false);
 
   useEffect(() => {
+    // Check URL query parameters and hash fragment for callback errors
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.substring(1) : "";
+      const hashParams = new URLSearchParams(hash);
+
+      const errCode = params.get("error_code") || hashParams.get("error_code") || params.get("error") || hashParams.get("error");
+      const errDesc = params.get("error_description") || hashParams.get("error_description");
+
+      if (errCode || errDesc) {
+        const lowerCode = (errCode || "").toLowerCase();
+        const lowerDesc = (errDesc || "").toLowerCase();
+
+        if (
+          lowerCode === "otp_expired" ||
+          lowerCode === "access_denied" ||
+          lowerCode.includes("expired") ||
+          lowerDesc.includes("expired") ||
+          lowerDesc.includes("invalid")
+        ) {
+          setError("This confirmation link has expired or has already been used. Please request a new confirmation email.");
+        } else if (lowerCode === "user_resolution_failed") {
+          setError("Unable to setup your user account. Please contact support or try signing in again.");
+        } else if (lowerCode === "auth_callback_failed") {
+          setError("Authentication failed or the verification link is invalid. Please try signing in or request a new confirmation email.");
+        } else {
+          setError(errDesc || "Authentication error. Please try signing in again.");
+        }
+
+        // Clean the address bar to remove error query and fragment
+        window.history.replaceState(null, "", window.location.pathname);
+        return;
+      }
+    }
+
     if (!authLoading && user) {
-      router.push("/");
+      router.push("/workspaces");
     }
   }, [user, authLoading, router]);
 

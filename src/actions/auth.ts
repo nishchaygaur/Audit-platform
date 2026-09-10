@@ -56,7 +56,13 @@ export async function signIn(formData: FormData): Promise<AuthActionResult> {
     }
 
     // Resolve and link application user
-    await resolveAppUser(data.user);
+    try {
+      await resolveAppUser(data.user);
+    } catch (err) {
+      console.error('[Auth] Error resolving application user during sign in:', err);
+      await supabase.auth.signOut().catch(() => {});
+      return { error: 'Failed to synchronize user account. Please contact support.' };
+    }
 
     return { success: true };
   } catch (err) {

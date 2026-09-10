@@ -163,8 +163,8 @@ export default function Sidebar() {  const { user } = useAuth();
     };
   }, []);
 
-  // Hide sidebar on standalone auth or dedicated workspace selection screens
-  if (pathname === "/signin" || pathname === "/workspaces" || pathname === "/reset-password") {
+  // Hide sidebar on standalone auth, unauthenticated states, or dedicated workspace selection screens
+  if (!user || pathname === "/signin" || pathname === "/workspaces" || pathname === "/reset-password") {
     return null;
   }
 
@@ -498,7 +498,7 @@ export default function Sidebar() {  const { user } = useAuth();
             </div>
 
             <div className="min-w-0 flex-1 text-left leading-tight">
-              <div className="truncate text-[12.5px] font-medium text-slate-100">{user?.name || "Unknown User"}</div>
+              <div className="truncate text-[12.5px] font-medium text-slate-100">{user?.name || user?.email || "User"}</div>
               <div className="truncate text-[10.5px] text-slate-400">{currentWorkspace?.role || "Viewer"}</div>
             </div>
 
@@ -516,7 +516,7 @@ export default function Sidebar() {  const { user } = useAuth();
               className="absolute bottom-[66px] left-3 right-3 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 text-slate-800 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-100"
             >
               <div className="border-b border-slate-100 px-3 py-2 bg-slate-50/80">
-                <p className="text-[12px] font-semibold text-slate-900">{user?.name || "Unknown User"}</p>
+                <p className="text-[12px] font-semibold text-slate-900">{user?.name || user?.email || "User"}</p>
                 <p className="truncate text-[11px] text-slate-500">
                   {user?.email || "No email provided"}
                 </p>

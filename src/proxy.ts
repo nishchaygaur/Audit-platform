@@ -43,13 +43,16 @@ export async function proxy(request: NextRequest) {
   if ((!user || !user.email_confirmed_at) && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/signin';
+    url.search = '';
     return NextResponse.redirect(url);
   }
 
-  // Prevent authenticated & verified users from returning to /signin
-  if (user && user.email_confirmed_at && pathname === '/signin') {
+  // Prevent authenticated & verified users from returning to /signin (unless an error parameter is present)
+  const hasError = request.nextUrl.searchParams.has('error');
+  if (user && user.email_confirmed_at && pathname === '/signin' && !hasError) {
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = '/workspaces';
+    url.search = '';
     return NextResponse.redirect(url);
   }
 

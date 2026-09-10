@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import { getDashboardData, type DashboardStats } from "@/actions/dashboard";
 
 type Severity = "Critical" | "High" | "Medium" | "Low";
@@ -381,8 +383,16 @@ function HealthMetric({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id;
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/signin");
+    }
+  }, [user, authLoading, router]);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -503,6 +513,10 @@ export default function DashboardPage() {
       };
     });
   }, [stats?.recentActivities]);
+
+  if (authLoading || !user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">

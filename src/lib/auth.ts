@@ -34,6 +34,14 @@ export async function resolveAppUser(supabaseUser: SupabaseUser): Promise<AppUse
   );
 
   if (userBySupabaseId) {
+    const metadataName =
+      (supabaseUser.user_metadata?.name as string | undefined)?.trim() ||
+      (supabaseUser.user_metadata?.full_name as string | undefined)?.trim();
+    if (metadataName && (!userBySupabaseId.name || userBySupabaseId.name === 'User' || userBySupabaseId.name === '')) {
+      await db.execute('UPDATE users SET name = $1 WHERE id = $2', [metadataName, userBySupabaseId.id]).catch(() => {});
+      userBySupabaseId.name = metadataName;
+    }
+
     return {
       id: userBySupabaseId.id,
       name: userBySupabaseId.name,
@@ -49,15 +57,24 @@ export async function resolveAppUser(supabaseUser: SupabaseUser): Promise<AppUse
   );
 
   if (userByEmail) {
-    // Link supabase_user_id to existing user without altering id or relationships
+    const metadataName =
+      (supabaseUser.user_metadata?.name as string | undefined)?.trim() ||
+      (supabaseUser.user_metadata?.full_name as string | undefined)?.trim();
+
+    const nameToUpdate =
+      metadataName && (!userByEmail.name || userByEmail.name === 'User' || userByEmail.name === '')
+        ? metadataName
+        : userByEmail.name;
+
+    // Link supabase_user_id to existing user without altering id, role, or relationships
     await db.execute(
-      'UPDATE users SET supabase_user_id = $1 WHERE id = $2',
-      [supabaseId, userByEmail.id]
+      'UPDATE users SET supabase_user_id = $1, name = $2 WHERE id = $3',
+      [supabaseId, nameToUpdate, userByEmail.id]
     );
 
     return {
       id: userByEmail.id,
-      name: userByEmail.name,
+      name: nameToUpdate,
       email: userByEmail.email,
       role: userByEmail.role,
     };
@@ -77,12 +94,29 @@ export async function resolveAppUser(supabaseUser: SupabaseUser): Promise<AppUse
     const countRow = await tx.queryOne<{ count: string | number }>('SELECT COUNT(*) as count FROM users');
     const isFirstUser = Number(countRow?.count || 0) === 0;
 
-    await tx.execute(
-      'INSERT INTO users (id, name, email, password, role, supabase_user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-      [newUserId, fallbackName, email, '', 'Viewer', supabaseId]
+    // Atomic insert with ON CONFLICT to avoid unique constraint race conditions
+    const upserted = await tx.queryOne<AppUser>(
+      `INSERT INTO users (id, name, email, password, role, supabase_user_id)
+       VALUES ($1, $2, $3, '', 'Viewer', $4)
+       ON CONFLICT (email) DO UPDATE
+       SET supabase_user_id = EXCLUDED.supabase_user_id,
+           name = CASE 
+             WHEN users.name IS NULL OR users.name = '' OR users.name = 'User' 
+             THEN EXCLUDED.name 
+             ELSE users.name 
+           END
+       RETURNING id, name, email, role`,
+      [newUserId, fallbackName, email, supabaseId]
     );
 
-    if (isFirstUser) {
+    const resolvedUser = upserted || {
+      id: newUserId,
+      name: fallbackName,
+      email,
+      role: 'Viewer',
+    };
+
+    if (isFirstUser && resolvedUser.id === newUserId) {
       const workspaceId = crypto.randomUUID();
       await tx.execute(
         'INSERT INTO workspaces (id, name) VALUES ($1, $2)',
@@ -94,12 +128,7 @@ export async function resolveAppUser(supabaseUser: SupabaseUser): Promise<AppUse
       );
     }
 
-    return {
-      id: newUserId,
-      name: fallbackName,
-      email,
-      role: 'Viewer',
-    };
+    return resolvedUser;
   });
 }
 
@@ -125,9 +154,14 @@ export async function getSession(): Promise<Session | null> {
     }
 
     const appUser = await resolveAppUser(user);
+    if (!appUser || !appUser.id) {
+      console.error('[Auth] resolveAppUser returned invalid user object for:', user.id);
+      return null;
+    }
+
     return { user: appUser };
   } catch (err) {
-    console.error('[Auth] Error getting session:', err);
+    console.error('[Auth] Error getting session / resolving application user:', err);
     return null;
   }
 }
