@@ -9,6 +9,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { getUserWorkspaces } from "@/actions/workspace";
 
 export type Workspace = {
   id: string;
@@ -21,6 +22,8 @@ type WorkspaceContextType = {
   workspaces: Workspace[];
   currentWorkspace: Workspace;
   setWorkspace: (id: string) => void;
+  addWorkspace: (workspace: Workspace) => void;
+  refreshWorkspaces: () => Promise<void>;
 };
 
 const WorkspaceContext = createContext<
@@ -36,13 +39,19 @@ export function WorkspaceProvider({
   children: ReactNode;
   initialWorkspaces?: Workspace[];
 }) {
+  const [workspacesList, setWorkspacesList] = useState<Workspace[]>(initialWorkspaces);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(() => {
     return initialWorkspaces.length > 0 ? initialWorkspaces[0].id : null;
   });
 
-  // Hydrate from localStorage and keep ID in sync if the initial list changes
+  // Keep workspacesList in sync with server initialWorkspaces
   useEffect(() => {
-    if (initialWorkspaces.length > 0) {
+    setWorkspacesList(initialWorkspaces);
+  }, [initialWorkspaces]);
+
+  // Hydrate from localStorage and keep ID in sync if the list changes
+  useEffect(() => {
+    if (workspacesList.length > 0) {
       let savedWorkspace: string | null = null;
       try {
         savedWorkspace = window.localStorage.getItem(STORAGE_KEY);
@@ -50,15 +59,13 @@ export function WorkspaceProvider({
         // ignore
       }
 
-      if (savedWorkspace && initialWorkspaces.some((w) => w.id === savedWorkspace)) {
+      if (savedWorkspace && workspacesList.some((w) => w.id === savedWorkspace)) {
         if (currentWorkspaceId !== savedWorkspace) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCurrentWorkspaceId(savedWorkspace);
         }
       } else {
-        const firstId = initialWorkspaces[0].id;
+        const firstId = workspacesList[0].id;
         if (currentWorkspaceId !== firstId) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCurrentWorkspaceId(firstId);
         }
         try {
@@ -66,11 +73,9 @@ export function WorkspaceProvider({
         } catch {}
       }
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentWorkspaceId(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialWorkspaces]);
+  }, [workspacesList]);
 
   const setWorkspace = useCallback((id: string) => {
     setCurrentWorkspaceId(id);
@@ -79,23 +84,45 @@ export function WorkspaceProvider({
     }
   }, []);
 
+  const addWorkspace = useCallback((workspace: Workspace) => {
+    setWorkspacesList((prev) => {
+      const exists = prev.some((w) => w.id === workspace.id);
+      if (exists) return prev;
+      return [workspace, ...prev];
+    });
+    setWorkspace(workspace.id);
+  }, [setWorkspace]);
+
+  const refreshWorkspaces = useCallback(async () => {
+    try {
+      const list = await getUserWorkspaces();
+      if (list && Array.isArray(list)) {
+        setWorkspacesList(list);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const fallbackWorkspace: Workspace = { 
     id: "", 
-    name: initialWorkspaces.length === 0 ? "No Workspace" : "Loading...", 
+    name: workspacesList.length === 0 ? "No Workspace" : "Loading...", 
     description: "" 
   };
 
   const currentWorkspace = currentWorkspaceId
-    ? initialWorkspaces.find((w) => w.id === currentWorkspaceId) || fallbackWorkspace
+    ? workspacesList.find((w) => w.id === currentWorkspaceId) || fallbackWorkspace
     : fallbackWorkspace;
 
   const value = useMemo(
     () => ({
-      workspaces: initialWorkspaces,
+      workspaces: workspacesList,
       currentWorkspace,
       setWorkspace,
+      addWorkspace,
+      refreshWorkspaces,
     }),
-    [initialWorkspaces, currentWorkspace, setWorkspace]
+    [workspacesList, currentWorkspace, setWorkspace, addWorkspace, refreshWorkspaces]
   );
 
   return (

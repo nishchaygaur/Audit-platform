@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAudits } from "@/context/AuditContext";
+import { getWorkspaceMembers } from "@/actions/workspace";
 import {
   CalendarDays,
   CheckCircle2,
@@ -127,23 +128,9 @@ function getStatusClass(status: string) {
 export default function AuditsPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const workspace = useWorkspace();
+  const { currentWorkspace } = useWorkspace();
   const { audits, addAudit, loading: auditsLoading } = useAudits();
-  const workspaceValue =
-    typeof workspace === "object" &&
-    workspace !== null &&
-    "currentWorkspace" in workspace
-      ? workspace.currentWorkspace
-      : null;
-
-  const workspaceName =
-    typeof workspaceValue === "string"
-      ? workspaceValue
-      : typeof workspaceValue === "object" &&
-          workspaceValue !== null &&
-          "name" in workspaceValue
-        ? String(workspaceValue.name)
-        : "Workspace";
+  const workspaceName = currentWorkspace?.name || "Workspace";
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Statuses");
@@ -152,15 +139,38 @@ export default function AuditsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
 
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; email: string; role: string }[]>([]);
+
   const [newAudit, setNewAudit] = useState({
     name: "",
     framework: "ISO 27001",
-    lead: user?.name || "Alice Smith",
+    lead: user?.name || "Lead Auditor",
     startDate: "",
     dueDate: "",
     objective: "",
     scope: "",
   });
+
+  useEffect(() => {
+    async function loadMembers() {
+      if (!currentWorkspace?.id) return;
+      try {
+        const members = await getWorkspaceMembers(currentWorkspace.id);
+        setWorkspaceMembers(members);
+        if (members.length > 0) {
+          setNewAudit((prev) => ({
+            ...prev,
+            lead: prev.lead && members.some((m) => (m.name || m.email) === prev.lead)
+              ? prev.lead
+              : members[0].name || members[0].email,
+          }));
+        }
+      } catch {
+        // fallback
+      }
+    }
+    void loadMembers();
+  }, [currentWorkspace?.id]);
 
   const [inScopeDomains, setInScopeDomains] = useState<string[]>([
     "Cloud Infrastructure",
@@ -248,7 +258,7 @@ export default function AuditsPage() {
     setNewAudit({
       name: "",
       framework: "ISO 27001",
-      lead: "Alice Smith",
+      lead: workspaceMembers[0]?.name || user?.name || "Lead Auditor",
       startDate: new Date().toISOString().split("T")[0],
       dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
       objective: "Assess and verify information security controls against standard requirements to identify gaps.",
@@ -347,7 +357,7 @@ export default function AuditsPage() {
               </p>
             </div>
 
-            {hasPermission(workspace.currentWorkspace?.role, "audits.create") && (
+            {hasPermission(currentWorkspace?.role, "audits.create") && (
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -874,14 +884,11 @@ export default function AuditsPage() {
                     <FormSelect
                       label="Audit Lead"
                       value={newAudit.lead}
-                      options={[
-                        "Alice Smith",
-                        "John Carter",
-                        "Emily Davis",
-                        "Michael Lee",
-                        "Sarah Brown",
-                        "David Wilson",
-                      ]}
+                      options={
+                        workspaceMembers.length > 0
+                          ? workspaceMembers.map((m) => m.name || m.email)
+                          : [user?.name || "Lead Auditor"]
+                      }
                       onChange={(value) => setNewAudit({ ...newAudit, lead: value })}
                     />
                   </div>

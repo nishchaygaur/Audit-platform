@@ -15,6 +15,8 @@ import {
   VALID_FINDING_STATUSES,
 } from "@/lib/findings-types";
 import { getAudits } from "@/actions/audits";
+import { getWorkspaceMembers } from "@/actions/workspace";
+import { getEvidences } from "@/actions/evidence";
 import type { ReactNode } from "react";
 
 import {
@@ -69,14 +71,23 @@ export default function FindingsPage() {
   const { currentWorkspace } = useWorkspace();
   const [findings, setFindings] = useState<Finding[]>([]);
   const [audits, setAudits] = useState<{ id: string; name: string }[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; email: string; role: string }[]>([]);
+  const [availableEvidence, setAvailableEvidence] = useState<{ id: string; name: string; reference: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function refreshData(workspaceId: string) {
     try {
-      const [findingsRes, auditsRes] = await Promise.all([
+      const [findingsRes, auditsRes, membersRes, evidenceRes] = await Promise.all([
         getFindings(workspaceId),
         getAudits(workspaceId),
+        getWorkspaceMembers(workspaceId),
+        getEvidences(workspaceId),
       ]);
+
+      if (membersRes) setWorkspaceMembers(membersRes);
+      if (evidenceRes.success && evidenceRes.data) {
+        setAvailableEvidence(evidenceRes.data.map((e) => ({ id: e.id, name: e.name, reference: e.reference })));
+      }
 
       if (findingsRes.success && findingsRes.data) {
         setFindings(
@@ -126,18 +137,27 @@ export default function FindingsPage() {
       if (!currentWorkspace?.id) {
         setFindings([]);
         setAudits([]);
+        setWorkspaceMembers([]);
+        setAvailableEvidence([]);
         setLoading(false);
         return;
       }
 
       setLoading(true);
       try {
-        const [findingsRes, auditsRes] = await Promise.all([
+        const [findingsRes, auditsRes, membersRes, evidenceRes] = await Promise.all([
           getFindings(currentWorkspace.id),
           getAudits(currentWorkspace.id),
+          getWorkspaceMembers(currentWorkspace.id),
+          getEvidences(currentWorkspace.id),
         ]);
 
         if (isCancelled) return;
+
+        if (membersRes) setWorkspaceMembers(membersRes);
+        if (evidenceRes.success && evidenceRes.data) {
+          setAvailableEvidence(evidenceRes.data.map((e) => ({ id: e.id, name: e.name, reference: e.reference })));
+        }
 
         if (findingsRes.success && findingsRes.data) {
           setFindings(
@@ -296,7 +316,7 @@ export default function FindingsPage() {
     setFormStatus("Open");
     setFormFramework("ISO 27001");
     setFormControl("");
-    setFormOwner("");
+    setFormOwner(workspaceMembers[0]?.name || "");
     setFormIdentifiedDate("");
     setFormDueDate("");
     setFormEvidence("");
@@ -309,6 +329,9 @@ export default function FindingsPage() {
     resetForm();
     if (audits.length > 0) {
       setFormAuditId(audits[0].id);
+    }
+    if (workspaceMembers.length > 0) {
+      setFormOwner(workspaceMembers[0].name);
     }
     setShowModal(true);
   }
@@ -839,6 +862,8 @@ export default function FindingsPage() {
           dueDate={formDueDate}
           evidence={formEvidence}
           recommendation={formRecommendation}
+          workspaceMembers={workspaceMembers}
+          availableEvidence={availableEvidence}
           setTitle={setFormTitle}
           setDescription={setFormDescription}
           setSeverity={setFormSeverity}
@@ -1326,6 +1351,8 @@ function FindingModal({
   setDueDate,
   setEvidence,
   setRecommendation,
+  workspaceMembers,
+  availableEvidence,
   onClose,
   onSave,
 }: {
@@ -1343,6 +1370,8 @@ function FindingModal({
   audits: { id: string; name: string }[];
   evidence: string;
   recommendation: string;
+  workspaceMembers: { id: string; name: string; email: string; role: string }[];
+  availableEvidence: { id: string; name: string; reference: string }[];
   setTitle: (value: string) => void;
   setDescription: (value: string) => void;
   setSeverity: (value: FindingSeverity) => void;
@@ -1468,19 +1497,27 @@ function FindingModal({
 
           <div className="grid grid-cols-2 gap-4">
 
-            <SelectField
-              label="Finding Owner"
-              value={owner}
-              options={[
-                "Alice Smith",
-                "John Carter",
-                "Emily Davis",
-                "Michael Lee",
-                "David Wilson",
-                "Sarah Brown",
-              ]}
-              onChange={setOwner}
-            />
+            <div>
+              <label className="mb-1.5 block text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                Finding Owner
+              </label>
+              <select
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none focus:border-blue-400"
+                data-testid="finding-owner-select"
+              >
+                <option value="">-- Select Finding Owner --</option>
+                {workspaceMembers.map((m) => (
+                  <option key={m.id} value={m.name}>
+                    {m.name} ({m.role})
+                  </option>
+                ))}
+                {owner && !workspaceMembers.some((m) => m.name === owner) && (
+                  <option value={owner}>{owner}</option>
+                )}
+              </select>
+            </div>
 
             <FormField
               label="Due Date"
@@ -1491,12 +1528,27 @@ function FindingModal({
 
           </div>
 
-          <FormField
-            label="Linked Evidence"
-            value={evidence}
-            onChange={setEvidence}
-            placeholder="e.g. Access Control Review.xlsx"
-          />
+          <div>
+            <label className="mb-1.5 block text-[9px] font-medium uppercase tracking-wide text-slate-400">
+              Linked Evidence
+            </label>
+            <select
+              value={evidence}
+              onChange={(e) => setEvidence(e.target.value)}
+              className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none focus:border-blue-400"
+              data-testid="finding-evidence-select"
+            >
+              <option value="">-- Select Linked Evidence --</option>
+              {availableEvidence.map((ev) => (
+                <option key={ev.id} value={ev.name}>
+                  {ev.reference ? `[${ev.reference}] ` : ""}{ev.name}
+                </option>
+              ))}
+              {evidence && !availableEvidence.some((ev) => ev.name === evidence) && (
+                <option value={evidence}>{evidence}</option>
+              )}
+            </select>
+          </div>
 
           <TextAreaField
             label="Recommendation / Remediation"

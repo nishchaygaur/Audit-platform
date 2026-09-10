@@ -13,6 +13,8 @@ import {
   Eye,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { getWorkspaceMembers } from "@/actions/workspace";
+import { getAudits } from "@/actions/audits";
 
 type EventType =
   | "Audit"
@@ -290,6 +292,34 @@ export default function CalendarPage() {
     useState<CalendarEvent | null>(null);
 
   const [form, setForm] = useState(emptyEvent);
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [workspaceAudits, setWorkspaceAudits] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadData() {
+      if (!currentWorkspace?.id) return;
+      try {
+        const [membersRes, auditsRes] = await Promise.all([
+          getWorkspaceMembers(currentWorkspace.id),
+          getAudits(currentWorkspace.id),
+        ]);
+        if (cancelled) return;
+        if (membersRes) {
+          setWorkspaceMembers(membersRes.map((m) => ({ id: m.id, name: m.name, role: m.role })));
+        }
+        if (auditsRes.success && auditsRes.data) {
+          setWorkspaceAudits(auditsRes.data.map((a) => ({ id: a.id, name: a.name })));
+        }
+      } catch (err) {
+        console.error("Failed to load members or audits in calendar:", err);
+      }
+    }
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspace?.id]);
   const inputClass =
   "w-full h-9 rounded-lg border border-slate-200 px-2.5 text-[12px] text-slate-700 outline-none bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
 
@@ -378,6 +408,8 @@ export default function CalendarPage() {
     setForm({
       ...emptyEvent,
       date: dateKey(targetDate),
+      owner: workspaceMembers[0]?.name || "",
+      reference: workspaceAudits[0]?.id || "",
     });
 
     setShowModal(true);
@@ -888,7 +920,7 @@ export default function CalendarPage() {
               </FormField>
 
               <FormField label="Owner">
-                <input
+                <select
                   value={form.owner}
                   onChange={(e) =>
                     setForm({
@@ -896,9 +928,19 @@ export default function CalendarPage() {
                       owner: e.target.value,
                     })
                   }
-                  placeholder="Enter owner"
                   className={inputClass}
-                />
+                  data-testid="calendar-owner-select"
+                >
+                  <option value="">-- Select Owner --</option>
+                  {workspaceMembers.map((m) => (
+                    <option key={m.id} value={m.name}>
+                      {m.name} ({m.role})
+                    </option>
+                  ))}
+                  {form.owner && !workspaceMembers.some((m) => m.name === form.owner) && (
+                    <option value={form.owner}>{form.owner}</option>
+                  )}
+                </select>
               </FormField>
 
               <FormField label="Date">
@@ -965,7 +1007,7 @@ export default function CalendarPage() {
               </FormField>
 
               <FormField label="Reference">
-                <input
+                <select
                   value={form.reference}
                   onChange={(e) =>
                     setForm({
@@ -973,9 +1015,19 @@ export default function CalendarPage() {
                       reference: e.target.value,
                     })
                   }
-                  placeholder="AUD-2024-001"
                   className={inputClass}
-                />
+                  data-testid="calendar-reference-select"
+                >
+                  <option value="">-- Select Audit Reference --</option>
+                  {workspaceAudits.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.id} - {a.name}
+                    </option>
+                  ))}
+                  {form.reference && !workspaceAudits.some((a) => a.id === form.reference) && (
+                    <option value={form.reference}>{form.reference}</option>
+                  )}
+                </select>
               </FormField>
 
               <div />

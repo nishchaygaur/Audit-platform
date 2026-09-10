@@ -19,7 +19,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
 import { hasPermission } from "@/lib/rbac";
 import { useRouter } from "next/navigation";
-import { addWorkspaceMember, updateWorkspaceMember, removeWorkspaceMember, getWorkspaceMembers } from "@/actions/workspace";
+import { addWorkspaceMember, updateWorkspaceMember, removeWorkspaceMember, getWorkspaceMembers, createUserWithWorkspaceMember } from "@/actions/workspace";
 
 type UserStatus = "Active" | "Inactive" | "Pending";
 
@@ -67,9 +67,21 @@ const statusClasses: Record<UserStatus, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
 };
 
-const emptyUser: Omit<PlatformUser, "id" | "lastLogin"> = {
+type PlatformUserForm = {
+  name: string;
+  email: string;
+  password?: string;
+  workspaceId?: string;
+  role: Role;
+  department: string;
+  status: UserStatus;
+};
+
+const emptyUser: PlatformUserForm = {
   name: "",
   email: "",
+  password: "",
+  workspaceId: "",
   role: "Auditor",
   department: "",
   status: "Active",
@@ -78,7 +90,7 @@ const emptyUser: Omit<PlatformUser, "id" | "lastLogin"> = {
 export default function AdministrationPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, workspaces } = useWorkspace();
 
   useEffect(() => {
     if (!loading && (!user || !hasPermission(currentWorkspace?.role, "workspace.manage"))) {
@@ -145,7 +157,10 @@ export default function AdministrationPage() {
 
   function openCreateModal() {
     setEditingUser(null);
-    setForm(emptyUser);
+    setForm({
+      ...emptyUser,
+      workspaceId: currentWorkspace.id,
+    });
     setShowModal(true);
   }
 
@@ -156,6 +171,7 @@ export default function AdministrationPage() {
       name: user.name,
       email: user.email,
       role: user.role,
+      workspaceId: currentWorkspace.id,
       department: user.department,
       status: user.status,
     });
@@ -186,22 +202,33 @@ export default function AdministrationPage() {
         )
       );
     } else {
-      const res = await addWorkspaceMember(currentWorkspace.id, form.email.trim(), form.role);
+      const targetWs = form.workspaceId || currentWorkspace.id;
+      const res = await createUserWithWorkspaceMember({
+        workspaceId: targetWs,
+        name: form.name.trim() || form.email.split("@")[0],
+        email: form.email.trim(),
+        password: form.password?.trim() || undefined,
+        role: form.role,
+      });
+
       if (res.error) {
         alert(res.error);
         return;
       }
-      // Refresh list
-      const members = await getWorkspaceMembers(currentWorkspace.id);
-      setUsers(members.map(m => ({
-        id: m.id,
-        name: m.name,
-        email: m.email,
-        department: "General",
-        role: m.role as Role,
-        status: "Active",
-        lastLogin: new Date().toISOString().split('T')[0]
-      })));
+
+      // If added to current workspace, refresh member list
+      if (targetWs === currentWorkspace.id) {
+        const members = await getWorkspaceMembers(currentWorkspace.id);
+        setUsers(members.map(m => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          department: "General",
+          role: m.role as Role,
+          status: "Active",
+          lastLogin: new Date().toISOString().split('T')[0]
+        })));
+      }
     }
 
     setShowModal(false);
@@ -477,9 +504,28 @@ export default function AdministrationPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 px-6 py-5">
-              <FormField label="Email Address">
+              {!editingUser && (
+                <FormField label="Full Name *">
+                  <input
+                    type="text"
+                    required
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        name: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. Jane Doe"
+                    className={inputClass}
+                  />
+                </FormField>
+              )}
+
+              <FormField label="Email Address *">
                 <input
                   type="email"
+                  required
                   value={form.email}
                   disabled={!!editingUser}
                   onChange={(e) =>
@@ -493,7 +539,28 @@ export default function AdministrationPage() {
                 />
               </FormField>
 
-              <FormField label="Role">
+              {!editingUser && (
+                <FormField label="Assign to Workspace">
+                  <select
+                    value={form.workspaceId || currentWorkspace.id}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        workspaceId: e.target.value,
+                      })
+                    }
+                    className={inputClass}
+                  >
+                    {workspaces.map((ws) => (
+                      <option key={ws.id} value={ws.id}>
+                        {ws.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+
+              <FormField label="Workspace Role">
                 <select
                   value={form.role}
                   onChange={(e) =>
@@ -511,6 +578,25 @@ export default function AdministrationPage() {
                   <option>Viewer</option>
                 </select>
               </FormField>
+
+              {!editingUser && (
+                <div className="col-span-2">
+                  <FormField label="Initial Password (Optional)">
+                    <input
+                      type="password"
+                      value={form.password || ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          password: e.target.value,
+                        })
+                      }
+                      placeholder="Leave blank for default: Password123!"
+                      className={inputClass}
+                    />
+                  </FormField>
+                </div>
+              )}
 
               <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
                 <p className="text-[10px] font-semibold text-blue-700">

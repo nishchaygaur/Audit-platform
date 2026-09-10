@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: process.env.VERCEL ? undefined : "standalone",
-  serverExternalPackages: ["bcryptjs", "pg"],
+  serverExternalPackages: ["bcryptjs", "pg", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
   reactCompiler: false,
 };
 

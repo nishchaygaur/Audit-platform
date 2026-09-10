@@ -5,11 +5,14 @@ import {
   createEvidence,
   updateEvidence,
   deleteEvidence as deleteEvidenceAction,
+  uploadEvidenceFile,
+  getEvidenceDownloadUrl,
   type EvidenceRecord,
 } from "@/actions/evidence";
 import { getAudits } from "@/actions/audits";
+import { getWorkspaceMembers } from "@/actions/workspace";
 import type { ReactNode } from "react";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 
 import {
   Upload,
@@ -152,14 +155,57 @@ export default function EvidencePage() {
   const [editingEvidence, setEditingEvidence] = useState<Evidence | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; email: string; role: string }[]>([]);
 
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState("PDF");
   const [formSize, setFormSize] = useState("");
   const [formControl, setFormControl] = useState("");
   const [formFramework, setFormFramework] = useState("ISO 27001");
-  const [formOwner, setFormOwner] = useState("Alice Smith");
+  const [formOwner, setFormOwner] = useState("Lead Auditor");
   const [formStatus, setFormStatus] = useState<EvidenceStatus>("Requested");
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadState, setUploadState] = useState<"idle" | "selected" | "uploading" | "uploaded" | "error">("idle");
+  const [uploadError, setUploadError] = useState<string>("");
+
+  useEffect(() => {
+    async function loadMembers() {
+      if (!currentWorkspace?.id) return;
+      try {
+        const members = await getWorkspaceMembers(currentWorkspace.id);
+        setWorkspaceMembers(members);
+        if (members.length > 0) {
+          setFormOwner(members[0].name || members[0].email);
+        }
+      } catch {
+        // fallback
+      }
+    }
+    void loadMembers();
+  }, [currentWorkspace?.id]);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+    setUploadState("selected");
+    setUploadError("");
+    setFormName(file.name);
+    const sizeInMb = file.size / (1024 * 1024);
+    if (sizeInMb >= 1) {
+      setFormSize(`${sizeInMb.toFixed(1)} MB`);
+    } else {
+      setFormSize(`${Math.max(1, Math.round(file.size / 1024))} KB`);
+    }
+    const ext = file.name.split(".").pop()?.toUpperCase() || "PDF";
+    if (["PDF", "DOCX", "XLSX", "CSV", "PNG", "JPG", "ZIP"].includes(ext)) {
+      setFormType(ext);
+    } else {
+      setFormType("PDF");
+    }
+  }
 
   const filteredEvidence = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -199,13 +245,16 @@ export default function EvidencePage() {
 
   function openAddEvidence() {
     setEditingEvidence(null);
+    setSelectedFile(null);
+    setUploadState("idle");
+    setUploadError("");
 
     setFormName("");
     setFormType("PDF");
     setFormSize("1.2 MB");
     setFormControl("A.5.1");
     setFormFramework("ISO 27001");
-    setFormOwner("Alice Smith");
+    setFormOwner(workspaceMembers[0]?.name || workspaceMembers[0]?.email || "Lead Auditor");
     setFormStatus("Requested");
     if (audits.length > 0) {
       setFormAuditId(audits[0].id);
@@ -216,6 +265,9 @@ export default function EvidencePage() {
 
   function openEditEvidence(item: Evidence) {
     setEditingEvidence(item);
+    setSelectedFile(null);
+    setUploadState("idle");
+    setUploadError("");
 
     setFormName(item.name);
     setFormType(item.type);
@@ -253,28 +305,77 @@ export default function EvidencePage() {
 
       if (res.success) {
         await loadData(currentWorkspace.id);
+        setShowModal(false);
+      } else {
+        setUploadError(res.error || "Failed to update evidence");
       }
     } else {
       if (!formAuditId) {
         return;
       }
 
-      const res = await createEvidence(currentWorkspace.id, formAuditId, {
-        name: formName.trim(),
-        type: formType,
-        size: formSize.trim() || "1.2 MB",
-        control: formControl.trim(),
-        framework: formFramework,
-        uploadedBy: formOwner,
-        status: formStatus,
-      });
+      if (selectedFile) {
+        setUploadState("uploading");
+        setUploadError("");
 
-      if (res.success) {
-        await loadData(currentWorkspace.id);
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("control", formControl.trim());
+        formData.append("framework", formFramework);
+        formData.append("status", formStatus);
+        formData.append("uploadedBy", formOwner);
+
+        const res = await uploadEvidenceFile(currentWorkspace.id, formAuditId, formData);
+        if (res.success) {
+          setUploadState("uploaded");
+          await loadData(currentWorkspace.id);
+          setShowModal(false);
+        } else {
+          setUploadState("error");
+          setUploadError(res.error || "Failed to upload file binary to persistent storage");
+          return;
+        }
+      } else {
+        const res = await createEvidence(currentWorkspace.id, formAuditId, {
+          name: formName.trim(),
+          type: formType,
+          size: formSize.trim() || "1.2 MB",
+          control: formControl.trim(),
+          framework: formFramework,
+          uploadedBy: formOwner,
+          status: formStatus,
+        });
+
+        if (res.success) {
+          await loadData(currentWorkspace.id);
+          setShowModal(false);
+        } else {
+          setUploadError(res.error || "Failed to register evidence metadata");
+        }
       }
     }
+  }
 
-    setShowModal(false);
+  async function handleDownload(item: Evidence) {
+    if (!currentWorkspace?.id) return;
+    const res = await getEvidenceDownloadUrl(currentWorkspace.id, item.id);
+    if (res.success && res.downloadUrl) {
+      const link = document.createElement("a");
+      link.href = res.downloadUrl;
+      link.setAttribute("download", res.filename || item.name);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // Fallback: direct download route
+      const fallbackUrl = `/api/evidence/download?workspaceId=${encodeURIComponent(currentWorkspace.id)}&evidenceId=${encodeURIComponent(item.id)}`;
+      const link = document.createElement("a");
+      link.href = fallbackUrl;
+      link.setAttribute("download", item.name);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   }
 
   async function deleteEvidence(item: Evidence) {
@@ -540,6 +641,10 @@ export default function EvidencePage() {
                         onDelete={() =>
                           deleteEvidence(item)
                         }
+                        onDownload={() => {
+                          void handleDownload(item);
+                          setOpenMenu(null);
+                        }}
                       />
                     ))
                   ) : (
@@ -567,14 +672,19 @@ export default function EvidencePage() {
 
             {/* FOOTER */}
 
-            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-              <span className="text-[10px] text-slate-400">
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-[10px] text-slate-400">
+              <span>
                 Showing {filteredEvidence.length} of{" "}
                 {evidence.length} evidence items
               </span>
 
-              <span className="text-[10px] text-slate-400">
-                {acceptedEvidence} accepted
+              <span>
+                Audits mapped:{" "}
+                {
+                  new Set(
+                    evidence.map((item) => item.auditId)
+                  ).size
+                }
               </span>
             </div>
           </div>
@@ -644,6 +754,10 @@ export default function EvidencePage() {
           setFramework={setFormFramework}
           setOwner={setFormOwner}
           setStatus={setFormStatus}
+          workspaceMembers={workspaceMembers}
+          onFileChange={handleFileChange}
+          uploadState={uploadState}
+          uploadError={uploadError}
           onClose={() => setShowModal(false)}
           onSave={saveEvidence}
         />
@@ -657,6 +771,7 @@ export default function EvidencePage() {
           onClose={() =>
             setSelectedEvidence(null)
           }
+          onDownload={() => void handleDownload(selectedEvidence)}
           onEdit={() => {
             setSelectedEvidence(null);
             openEditEvidence(selectedEvidence);
@@ -789,6 +904,7 @@ function EvidenceRow({
   onAccept,
   onReject,
   onDelete,
+  onDownload,
 }: {
   item: Evidence;
   menuOpen: boolean;
@@ -798,6 +914,7 @@ function EvidenceRow({
   onAccept: () => void;
   onReject: () => void;
   onDelete: () => void;
+  onDownload: () => void;
 }) {
   const statusClass =
     item.status === "Accepted"
@@ -886,6 +1003,16 @@ function EvidenceRow({
             >
               <Eye className="h-3.5 w-3.5" />
               View Evidence
+            </button>
+
+            <button
+              type="button"
+              onClick={onDownload}
+              data-testid={`evidence-row-download-${item.id}`}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-blue-600 hover:bg-blue-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download File
             </button>
 
             <button
@@ -989,6 +1116,10 @@ function EvidenceModal({
   setFramework,
   setOwner,
   setStatus,
+  workspaceMembers,
+  onFileChange,
+  uploadState,
+  uploadError,
   onClose,
   onSave,
 }: {
@@ -1010,9 +1141,15 @@ function EvidenceModal({
   setFramework: (value: string) => void;
   setOwner: (value: string) => void;
   setStatus: (value: EvidenceStatus) => void;
+  workspaceMembers: { id: string; name: string; email: string; role: string }[];
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  uploadState: "idle" | "selected" | "uploading" | "uploaded" | "error";
+  uploadError: string;
   onClose: () => void;
   onSave: () => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-6">
       <div className="w-full max-w-[560px] overflow-hidden rounded-xl bg-white shadow-2xl">
@@ -1041,6 +1178,55 @@ function EvidenceModal({
         </div>
 
         <div className="space-y-4 px-6 py-5">
+          {/* File Upload Zone */}
+          <div
+            className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/70 p-4 text-center hover:bg-slate-100/70 transition cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={onFileChange}
+              data-testid="evidence-file-input"
+              className="hidden"
+            />
+            <Upload className="mx-auto h-6 w-6 text-blue-600 mb-1.5" />
+            <p className="text-xs font-semibold text-slate-700">
+              {name ? `Selected File: ${name}` : "Click to select a file or drag & drop"}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              Supports PDF, DOCX, XLSX, CSV, PNG, JPG (persistent binary storage)
+            </p>
+          </div>
+
+          {uploadState === "selected" && (
+            <div data-testid="evidence-upload-status" className="rounded-md border border-emerald-200 bg-emerald-50/80 p-2.5 text-left">
+              <div className="flex items-center gap-2 text-emerald-800 font-semibold text-xs">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>Ready for upload: {name}</span>
+              </div>
+              <p className="text-[10px] text-emerald-600 mt-0.5">Size: {size} · Binary bytes will be persistently stored on submit.</p>
+            </div>
+          )}
+
+          {uploadState === "uploading" && (
+            <div data-testid="evidence-upload-status" className="rounded-md border border-blue-200 bg-blue-50/80 p-2.5 text-left">
+              <div className="flex items-center gap-2 text-blue-800 font-semibold text-xs">
+                <Clock3 className="h-4 w-4 text-blue-600 animate-spin" />
+                <span>Uploading binary to persistent object storage...</span>
+              </div>
+            </div>
+          )}
+
+          {uploadState === "error" && (
+            <div data-testid="evidence-upload-status" className="rounded-md border border-red-200 bg-red-50/80 p-2.5 text-left">
+              <div className="flex items-center gap-2 text-red-800 font-semibold text-xs">
+                <XCircle className="h-4 w-4 text-red-600" />
+                <span>Upload Failed: {uploadError}</span>
+              </div>
+            </div>
+          )}
+
           {audits && audits.length > 0 && (
             <div>
               <label className="mb-1.5 block text-[9px] font-medium uppercase tracking-wide text-slate-400">
@@ -1115,15 +1301,13 @@ function EvidenceModal({
 
           <SelectField
             label="Evidence Owner"
+            dataTestId="evidence-owner-select"
             value={owner}
-            options={[
-              "Alice Smith",
-              "John Carter",
-              "Emily Davis",
-              "Michael Lee",
-              "David Wilson",
-              "Sarah Brown",
-            ]}
+            options={
+              workspaceMembers.length > 0
+                ? workspaceMembers.map((m) => m.name || m.email)
+                : ["Lead Auditor"]
+            }
             onChange={setOwner}
           />
 
@@ -1170,13 +1354,16 @@ function EvidenceModal({
             disabled={
               !name.trim() ||
               !size.trim() ||
-              !control.trim()
+              !control.trim() ||
+              uploadState === "uploading"
             }
             className="h-8 rounded-md bg-blue-600 px-4 text-[10px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {editing
-              ? "Save Changes"
-              : "Add Evidence"}
+            {uploadState === "uploading"
+              ? "Uploading..."
+              : editing
+                ? "Save Changes"
+                : "Add Evidence"}
           </button>
         </div>
       </div>
@@ -1227,11 +1414,13 @@ function SelectField({
   value,
   options,
   onChange,
+  dataTestId,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  dataTestId?: string;
 }) {
   return (
     <div>
@@ -1241,6 +1430,7 @@ function SelectField({
 
       <select
         value={value}
+        data-testid={dataTestId}
         onChange={(event) =>
           onChange(event.target.value)
         }
@@ -1264,10 +1454,12 @@ function EvidenceDetails({
   item,
   onClose,
   onEdit,
+  onDownload,
 }: {
   item: Evidence;
   onClose: () => void;
   onEdit: () => void;
+  onDownload: () => void;
 }) {
   const statusClass =
     item.status === "Accepted"
@@ -1381,10 +1573,12 @@ function EvidenceDetails({
         <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
           <button
             type="button"
-            className="flex h-8 items-center gap-2 rounded-md border border-slate-200 px-3 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+            onClick={onDownload}
+            data-testid="evidence-details-download-btn"
+            className="flex h-8 items-center gap-2 rounded-md border border-slate-200 px-3 text-[10px] font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600"
           >
             <Download className="h-3.5 w-3.5" />
-            Download
+            Download File
           </button>
 
           <div className="flex gap-2">

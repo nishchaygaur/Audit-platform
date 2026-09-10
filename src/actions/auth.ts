@@ -57,6 +57,12 @@ export async function signUp(formData: FormData) {
     return { error: 'All fields are required' };
   }
 
+  // Gmail address format validation
+  const gmailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|googlemail\.com)$/i;
+  if (!gmailRegex.test(email)) {
+    return { error: 'Registration requires a valid Gmail address (@gmail.com or @googlemail.com).' };
+  }
+
   try {
     const existing = await db.queryOne<{ id: string }>(
       'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
@@ -123,3 +129,115 @@ export async function signOut() {
   await clearSession();
   redirect('/signin');
 }
+
+export async function requestPasswordReset(email: string) {
+  const cleanEmail = email?.trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, error: "Email address is required" };
+  }
+
+  try {
+    const user = await db.queryOne<{ id: string; name: string }>(
+      "SELECT id, name FROM users WHERE LOWER(email) = LOWER($1)",
+      [cleanEmail]
+    );
+
+    if (!user) {
+      return {
+        success: false,
+        error: "No account registered with this email address.",
+      };
+    }
+
+    // Generate 6-digit verification code
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const id = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins
+
+    await db.execute(
+      "INSERT INTO password_resets (id, email, token, expires_at, used) VALUES ($1, $2, $3, $4, FALSE)",
+      [id, cleanEmail, token, expiresAt]
+    );
+
+    return {
+      success: true,
+      token,
+      message: `Password reset code generated: ${token}. In production, this would be sent to your email.`,
+    };
+  } catch (err) {
+    console.error("[Auth] Error requesting password reset:", err);
+    return {
+      success: false,
+      error: "An error occurred while generating password reset code.",
+    };
+  }
+}
+
+export async function resetPasswordWithToken(
+  email: string,
+  token: string,
+  newPassword: string
+) {
+  const cleanEmail = email?.trim().toLowerCase();
+  const cleanToken = token?.trim();
+
+  if (!cleanEmail || !cleanToken || !newPassword) {
+    return { success: false, error: "All fields are required" };
+  }
+
+  if (newPassword.length < 8) {
+    return {
+      success: false,
+      error: "New password must be at least 8 characters long.",
+    };
+  }
+
+  try {
+    const record = await db.queryOne<{
+      id: string;
+      expires_at: string;
+      used: boolean;
+    }>(
+      "SELECT id, expires_at, used FROM password_resets WHERE LOWER(email) = LOWER($1) AND token = $2 AND used = FALSE ORDER BY created_at DESC LIMIT 1",
+      [cleanEmail, cleanToken]
+    );
+
+    if (!record) {
+      return {
+        success: false,
+        error: "Invalid or expired reset code. Please request a new one.",
+      };
+    }
+
+    if (new Date(record.expires_at) < new Date()) {
+      return {
+        success: false,
+        error: "Reset code has expired. Please request a new one.",
+      };
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        "UPDATE users SET password = $1 WHERE LOWER(email) = LOWER($2)",
+        [hashedPassword, cleanEmail]
+      );
+      await tx.execute("UPDATE password_resets SET used = TRUE WHERE id = $1", [
+        record.id,
+      ]);
+    });
+
+    return {
+      success: true,
+      message: "Password reset successfully. You can now sign in.",
+    };
+  } catch (err) {
+    console.error("[Auth] Error resetting password:", err);
+    return {
+      success: false,
+      error: "An error occurred while resetting password.",
+    };
+  }
+}
+

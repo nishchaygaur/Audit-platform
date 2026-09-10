@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/server-rbac";
 import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
 
-export type PlanStatus = "Draft" | "Active" | "Completed" | "Archived";
+export type PlanStatus = "Draft" | "Approved" | "In Progress" | "Active" | "Completed" | "Archived";
 
 export interface AuditPlanRecord {
   id: string;

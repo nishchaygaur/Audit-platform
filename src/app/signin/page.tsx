@@ -1,8 +1,8 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { ShieldCheck, Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+import { ShieldCheck, Eye, EyeOff, Lock, Mail, User, X, CheckCircle2, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { signIn, signUp } from "@/actions/auth";
+import { signIn, signUp, requestPasswordReset, resetPasswordWithToken } from "@/actions/auth";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect } from "react";
 
@@ -18,6 +18,17 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
+  // Forgot password dialog state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState(false);
+
   useEffect(() => {
     if (!authLoading && user) {
       router.push("/");
@@ -31,6 +42,14 @@ export default function SignInPage() {
     if (!email.trim() || !password.trim() || (isSignUp && !name.trim())) {
       setError("Please fill in all required fields.");
       return;
+    }
+
+    if (isSignUp) {
+      const isGmail = /^[a-zA-Z0-9._%+-]+@(gmail\.com|googlemail\.com)$/i.test(email.trim());
+      if (!isGmail) {
+        setError("Registration requires a valid Gmail address (@gmail.com or @googlemail.com).");
+        return;
+      }
     }
 
     setLoading(true);
@@ -50,6 +69,62 @@ export default function SignInPage() {
     } else {
       router.refresh();
       router.push("/workspaces");
+    }
+  }
+
+  async function handleRequestReset(e: FormEvent) {
+    e.preventDefault();
+    setResetError("");
+    setResetMessage("");
+    if (!resetEmail.trim()) {
+      setResetError("Please enter your email address.");
+      return;
+    }
+    setResetLoading(true);
+    const res = await requestPasswordReset(resetEmail.trim());
+    setResetLoading(false);
+    if (res.success) {
+      setResetMessage(res.message || "Reset code generated.");
+      if (res.token) {
+        setResetToken(res.token);
+      }
+      setResetStep(2);
+    } else {
+      setResetError(res.error || "Failed to request password reset.");
+    }
+  }
+
+  async function handleResetPassword(e: FormEvent) {
+    e.preventDefault();
+    setResetError("");
+    if (!resetToken.trim() || !resetNewPassword.trim()) {
+      setResetError("Please fill in both the reset code and new password.");
+      return;
+    }
+    if (resetNewPassword.length < 8) {
+      setResetError("New password must be at least 8 characters long.");
+      return;
+    }
+    setResetLoading(true);
+    const res = await resetPasswordWithToken(
+      resetEmail.trim(),
+      resetToken.trim(),
+      resetNewPassword.trim()
+    );
+    setResetLoading(false);
+    if (res.success) {
+      setResetSuccess(true);
+      setResetMessage("Password reset successfully! You can now sign in.");
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setResetSuccess(false);
+        setResetStep(1);
+        setResetEmail("");
+        setResetToken("");
+        setResetNewPassword("");
+      }, 1500);
+    } else {
+      setResetError(res.error || "Failed to reset password.");
     }
   }
 
@@ -186,7 +261,13 @@ export default function SignInPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={() => alert("Password recovery will be connected to the authentication backend.")}
+                  onClick={() => {
+                    setResetEmail(email || "");
+                    setResetStep(1);
+                    setResetError("");
+                    setResetMessage("");
+                    setShowForgotModal(true);
+                  }}
                   className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
                 >
                   Forgot password?
@@ -227,6 +308,167 @@ export default function SignInPage() {
           </p>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 p-4">
+          <div data-testid="forgot-password-modal" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {resetStep === 1 ? "Reset your password" : "Enter Verification Code"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {resetStep === 1 ? "Enter your registered email address" : "Enter the code and your new password"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                data-testid="close-forgot-password-button"
+                onClick={() => setShowForgotModal(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {resetSuccess ? (
+              <div className="py-6 text-center space-y-3">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <CheckCircle2 size={24} />
+                </div>
+                <h4 className="text-sm font-semibold text-slate-900">Password Reset Complete</h4>
+                <p className="text-xs text-slate-500">{resetMessage}</p>
+              </div>
+            ) : resetStep === 1 ? (
+              <form onSubmit={handleRequestReset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                    Email address
+                  </label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      data-testid="forgot-password-email-input"
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      required
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                    />
+                  </div>
+                </div>
+
+                {resetError && (
+                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                    {resetError}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {resetLoading ? "Checking..." : "Request Reset Code"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                {resetMessage && (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+                    {resetMessage}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                    6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    value={resetToken}
+                    onChange={(e) => setResetToken(e.target.value)}
+                    placeholder="e.g. 123456"
+                    required
+                    maxLength={10}
+                    className="h-10 w-full font-mono tracking-widest text-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                    New Password (min 8 characters)
+                  </label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="password"
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      minLength={8}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                    />
+                  </div>
+                </div>
+
+                {resetError && (
+                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                    {resetError}
+                  </p>
+                )}
+
+                <div className="flex justify-between items-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetStep(1);
+                      setResetError("");
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-800 underline"
+                  >
+                    Back to email
+                  </button>
+
+                  <div className="flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {resetLoading ? "Updating..." : "Reset Password"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

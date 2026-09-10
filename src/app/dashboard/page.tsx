@@ -394,7 +394,10 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState("Current Audit Period");
 
   const loadData = useCallback(async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -545,7 +548,25 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {loading ? (
+          {!workspaceId ? (
+            <div className="flex flex-col items-center justify-center p-14 bg-white rounded-xl border border-slate-200 text-center space-y-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <ShieldAlert size={28} />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">No Workspace Assigned</h3>
+                <p className="mt-1 text-xs text-slate-500 max-w-sm">
+                  You are not currently assigned to any workspace. Contact your administrator or create a new workspace to access audits and compliance metrics.
+                </p>
+              </div>
+              <a
+                href="/workspaces"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+              >
+                Go to Workspaces
+              </a>
+            </div>
+          ) : loading ? (
             <div className="flex h-64 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-slate-500">
               <Loader2 className="animate-spin" size={24} />
               <span className="text-sm">Loading live audit metrics...</span>

@@ -27,6 +27,7 @@ import {
   deleteReport as deleteReportAction,
   type ReportRecord,
 } from "@/actions/reports";
+import AuditReportViewer from "@/components/reports/AuditReportViewer";
 
 type ReportStatus = "Draft" | "Generating" | "Completed" | "Failed";
 
@@ -755,183 +756,13 @@ export default function AuditReportsPage() {
         </div>
       )}
 
-      {/* Report Details / Preview Modal */}
+      {/* Human-Readable Report Viewer Modal */}
       {selectedReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="sticky top-0 bg-white z-10 flex items-start justify-between border-b border-[#edf0f5] px-6 py-5">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                  RPT-{selectedReport.id.substring(0, 8).toUpperCase()}
-                </p>
-
-                <h2 className="mt-1 text-[18px] font-bold text-[#111827]">
-                  {selectedReport.name}
-                </h2>
-
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="rounded-md bg-[#f1f5f9] px-2.5 py-1 text-[10px] font-medium text-[#475569]">
-                    {selectedReport.type}
-                  </span>
-
-                  <span className="rounded-md bg-blue-50 px-2.5 py-1 text-[10px] font-medium text-blue-700">
-                    {selectedReport.framework || "ISO 27001"}
-                  </span>
-
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${statusClasses(
-                      selectedReport.status
-                    )}`}
-                  >
-                    {statusIcon(selectedReport.status)}
-                    {selectedReport.status}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="rounded-lg p-2 text-[#8a94a6] hover:bg-[#f3f5f8]"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="px-6 py-6 space-y-6">
-              <div className="grid grid-cols-4 gap-3">
-                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
-                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
-                    Findings
-                  </p>
-                  <p className="mt-1 text-[20px] font-bold text-red-600">
-                    {selectedReport.summary_stats?.findingsCount ?? 0}
-                  </p>
-                  <span className="text-[10px] text-slate-500">
-                    Critical: {selectedReport.summary_stats?.criticalFindings ?? 0}
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
-                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
-                    Risks
-                  </p>
-                  <p className="mt-1 text-[20px] font-bold text-amber-600">
-                    {selectedReport.summary_stats?.risksCount ?? 0}
-                  </p>
-                  <span className="text-[10px] text-slate-500">
-                    High: {selectedReport.summary_stats?.highRisks ?? 0}
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
-                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
-                    Controls
-                  </p>
-                  <p className="mt-1 text-[20px] font-bold text-blue-600">
-                    {selectedReport.summary_stats?.controlsCount ?? 0}
-                  </p>
-                  <span className="text-[10px] text-slate-500">
-                    Compliant: {selectedReport.summary_stats?.compliantCount ?? 0}
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-[#e8ecf2] p-4 bg-slate-50/50">
-                  <p className="text-[10px] uppercase font-bold text-[#8a94a6]">
-                    Evidence
-                  </p>
-                  <p className="mt-1 text-[20px] font-bold text-emerald-600">
-                    {selectedReport.summary_stats?.evidenceCount ?? 0}
-                  </p>
-                  <span className="text-[10px] text-slate-500">
-                    Artifacts attached
-                  </span>
-                </div>
-              </div>
-
-              {selectedReport.content?.executiveSummary && (
-                <div className="rounded-lg border border-slate-200 p-4 bg-white">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                    Executive Summary
-                  </h4>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    {selectedReport.content.executiveSummary}
-                  </p>
-                </div>
-              )}
-
-              {selectedReport.content?.scope && (
-                <div className="rounded-lg border border-slate-200 p-4 bg-white">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                    Scope & Objectives
-                  </h4>
-                  <p className="text-xs text-slate-700 leading-relaxed mb-2">
-                    <span className="font-semibold">Scope:</span> {selectedReport.content.scope}
-                  </p>
-                  {selectedReport.content.objectives && (
-                    <p className="text-xs text-slate-700 leading-relaxed">
-                      <span className="font-semibold">Objectives:</span> {selectedReport.content.objectives}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-5 rounded-lg border border-slate-200 p-4 bg-slate-50/50">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Generated Date
-                  </p>
-                  <p className="mt-1 text-[12px] text-[#374151]">
-                    {new Date(selectedReport.created_at).toLocaleString()}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Generated By
-                  </p>
-                  <p className="mt-1 text-[12px] text-[#374151]">
-                    {selectedReport.generated_by}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Workspace
-                  </p>
-                  <p className="mt-1 text-[12px] text-[#374151]">
-                    {currentWorkspace.name}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8a94a6]">
-                    Audit Identifier
-                  </p>
-                  <p className="mt-1 text-[12px] font-mono text-[#374151]">
-                    {selectedReport.audit_id}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 bg-white z-10 flex justify-end gap-3 border-t border-[#edf0f5] px-6 py-4">
-              <button
-                onClick={() => downloadReportJson(selectedReport)}
-                className="flex items-center gap-2 rounded-lg border border-[#dfe4ec] px-4 py-2 text-[12px] font-medium text-[#475569] hover:bg-[#f8fafc]"
-              >
-                <Download size={15} />
-                Download JSON
-              </button>
-
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="rounded-lg bg-[#111827] px-4 py-2 text-[12px] font-semibold text-white"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <AuditReportViewer
+          report={selectedReport}
+          onClose={() => setSelectedReport(null)}
+          onDownloadJson={downloadReportJson}
+        />
       )}
     </div>
   );

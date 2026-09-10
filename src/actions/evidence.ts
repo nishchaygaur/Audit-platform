@@ -4,6 +4,8 @@ import db from "@/lib/db";
 import { requirePermission } from "@/lib/server-rbac";
 import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
+import path from "path";
+import storage from "@/lib/storage";
 
 export type EvidenceStatus =
   | "Requested"
@@ -33,6 +35,8 @@ export type CreateEvidenceInput = {
   status?: EvidenceStatus;
   description?: string;
   reviewedBy?: string;
+  storageKey?: string;
+  mimeType?: string;
 };
 
 export type UpdateEvidenceInput = {
@@ -47,6 +51,8 @@ export type UpdateEvidenceInput = {
   status?: EvidenceStatus;
   description?: string;
   reviewedBy?: string;
+  storageKey?: string;
+  mimeType?: string;
 };
 
 export type EvidenceRecord = {
@@ -64,7 +70,10 @@ export type EvidenceRecord = {
   size: string;
   framework: string;
   reviewed_by: string;
+  storage_key?: string;
+  mime_type?: string;
   created_at: string;
+  updated_at?: string;
   audit_name?: string;
 };
 
@@ -240,14 +249,17 @@ export async function createEvidence(
     const size = data.size || "1.2 MB";
     const framework = data.framework || audit.framework || "ISO 27001";
     const reviewedBy = data.reviewedBy || "—";
+    const storageKey = data.storageKey || "";
+    const mimeType = data.mimeType || "application/octet-stream";
 
     await db.execute(
       `
       INSERT INTO evidence (
         id, workspace_id, audit_id, reference, name, type, control,
-        uploaded_by, date, status, description, size, framework, reviewed_by
+        uploaded_by, date, status, description, size, framework, reviewed_by,
+        storage_key, mime_type
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       `,
       [
         id,
@@ -264,6 +276,8 @@ export async function createEvidence(
         size,
         framework,
         reviewedBy,
+        storageKey,
+        mimeType,
       ]
     );
 
@@ -292,6 +306,8 @@ export async function createEvidence(
       size,
       framework,
       reviewed_by: reviewedBy,
+      storage_key: storageKey,
+      mime_type: mimeType,
       created_at: new Date().toISOString(),
     };
 
@@ -301,7 +317,7 @@ export async function createEvidence(
       entityType: "Evidence",
       entityId: id,
       description: `Uploaded evidence "${name}" (${reference})`,
-      details: { control, framework, status, uploadedBy },
+      details: { control, framework, status, uploadedBy, storageKey },
     });
 
     return { success: true, data: record };
@@ -476,9 +492,9 @@ export async function deleteEvidence(
 
     let existing;
     if (auditId) {
-      existing = await db.queryOne<{ id: string; name: string; reference: string; audit_id: string }>(
+      existing = await db.queryOne<{ id: string; name: string; reference: string; audit_id: string; storage_key?: string }>(
         `
-          SELECT e.id, e.name, e.reference, e.audit_id
+          SELECT e.id, e.name, e.reference, e.audit_id, e.storage_key
           FROM evidence e
           JOIN audits a ON e.audit_id = a.id
           WHERE e.id = $1 AND e.audit_id = $2 AND a.workspace_id = $3
@@ -486,9 +502,9 @@ export async function deleteEvidence(
         [evidenceId, auditId, workspaceId]
       );
     } else {
-      existing = await db.queryOne<{ id: string; name: string; reference: string; audit_id: string }>(
+      existing = await db.queryOne<{ id: string; name: string; reference: string; audit_id: string; storage_key?: string }>(
         `
-          SELECT e.id, e.name, e.reference, e.audit_id
+          SELECT e.id, e.name, e.reference, e.audit_id, e.storage_key
           FROM evidence e
           JOIN audits a ON e.audit_id = a.id
           WHERE e.id = $1 AND a.workspace_id = $2
@@ -499,6 +515,11 @@ export async function deleteEvidence(
 
     if (!existing) {
       return { success: false, error: "Evidence not found in this workspace" };
+    }
+
+    // Clean up persistent binary object if present
+    if (existing.storage_key) {
+      await storage.deleteObject(existing.storage_key).catch(() => {});
     }
 
     await db.execute(
@@ -530,6 +551,229 @@ export async function deleteEvidence(
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to delete evidence";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Uploads a real binary file to persistent object storage and persists its metadata in Neon PostgreSQL.
+ * Strictly verifies workspace isolation, file type, file size, and non-empty content.
+ */
+export async function uploadEvidenceFile(
+  workspaceId: string,
+  auditId: string,
+  formData: FormData
+): Promise<{ success: boolean; data?: EvidenceRecord; error?: string }> {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
+  if (!auditId) {
+    return { success: false, error: "Audit ID is required" };
+  }
+
+  try {
+    const auth = await requirePermission("evidence.create", workspaceId);
+
+    // Verify target audit belongs to this workspace
+    const audit = await db.queryOne<{ id: string; framework: string }>(
+      `SELECT id, framework FROM audits WHERE id = $1 AND workspace_id = $2`,
+      [auditId, workspaceId]
+    );
+
+    if (!audit) {
+      return { success: false, error: "Audit not found in this workspace" };
+    }
+
+    const file = formData.get("file") as File | null;
+    if (!file || typeof file === "string") {
+      return { success: false, error: "No file provided for upload" };
+    }
+
+    if (file.size === 0) {
+      return { success: false, error: "File cannot be empty (0 bytes)" };
+    }
+
+    const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB limit
+    if (file.size > MAX_FILE_SIZE) {
+      return { success: false, error: "File exceeds 25 MB maximum size limit" };
+    }
+
+    const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".csv", ".png", ".jpg", ".jpeg"];
+    const ext = path.extname(file.name).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return {
+        success: false,
+        error: `Unsupported file format '${ext}'. Allowed formats: PDF, DOCX, XLSX, CSV, PNG, JPG`,
+      };
+    }
+
+    const control = (formData.get("control") as string)?.trim() || "General";
+    const framework = (formData.get("framework") as string)?.trim() || audit.framework || "ISO 27001";
+    let status = (formData.get("status") as EvidenceStatus) || "Submitted";
+    if (!VALID_EVIDENCE_STATUSES.includes(status)) {
+      status = "Submitted";
+    }
+    const uploadedBy = (formData.get("uploadedBy") as string)?.trim() || auth.user.name || "Auditor";
+    const description = (formData.get("description") as string)?.trim() || "";
+    const reference = (formData.get("reference") as string)?.trim() || `EV-${crypto.randomUUID().slice(0, 4).toUpperCase()}`;
+
+    // Format file type based on extension
+    const type = ext.replace(".", "").toUpperCase();
+    const sizeFormatted = file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(1)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+
+    const mimeType = file.type || "application/octet-stream";
+
+    // 1. Generate unguessable persistent storage key
+    const storageKey = storage.generateStorageKey(workspaceId, auditId, file.name);
+
+    // 2. Read file binary buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 3. PERSIST BINARY CONTENT TO OBJECT STORAGE FIRST
+    await storage.putObject({
+      key: storageKey,
+      body: buffer,
+      contentType: mimeType,
+      metadata: {
+        workspaceId,
+        auditId,
+        filename: file.name,
+      },
+    });
+
+    // 4. ONLY AFTER BINARY STORAGE SUCCEEDS, INSERT METADATA RECORD IN NEON POSTGRESQL
+    const id = `EVD-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
+    const date = new Date().toISOString().split("T")[0];
+
+    await db.execute(
+      `
+      INSERT INTO evidence (
+        id, workspace_id, audit_id, reference, name, type, control,
+        uploaded_by, date, status, description, size, framework, reviewed_by,
+        storage_key, mime_type
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `,
+      [
+        id,
+        workspaceId,
+        auditId,
+        reference,
+        file.name,
+        type,
+        control,
+        uploadedBy,
+        date,
+        status,
+        description,
+        sizeFormatted,
+        framework,
+        "—",
+        storageKey,
+        mimeType,
+      ]
+    );
+
+    // Sync audit evidence counter
+    await db.execute(
+      `
+      UPDATE audits
+      SET evidence = (SELECT COUNT(*) FROM evidence WHERE audit_id = $1)
+      WHERE id = $2
+      `,
+      [auditId, auditId]
+    );
+
+    const record: EvidenceRecord = {
+      id,
+      workspace_id: workspaceId,
+      audit_id: auditId,
+      reference,
+      name: file.name,
+      type,
+      control,
+      uploaded_by: uploadedBy,
+      date,
+      status,
+      description,
+      size: sizeFormatted,
+      framework,
+      reviewed_by: "—",
+      storage_key: storageKey,
+      mime_type: mimeType,
+      created_at: new Date().toISOString(),
+    };
+
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Evidence",
+      entityId: id,
+      description: `Uploaded persistent evidence "${file.name}" (${reference})`,
+      details: { control, framework, status, uploadedBy, storageKey, size: sizeFormatted },
+    });
+
+    return { success: true, data: record };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to upload evidence file";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Generates an authenticated, short-lived signed download URL for an evidence item.
+ * Strictly checks that the requester belongs to the workspace and the evidence belongs to that workspace.
+ */
+export async function getEvidenceDownloadUrl(
+  workspaceId: string,
+  evidenceId: string
+): Promise<{ success: boolean; downloadUrl?: string; filename?: string; error?: string }> {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
+  if (!evidenceId) {
+    return { success: false, error: "Evidence ID is required" };
+  }
+
+  try {
+    await requirePermission("evidence.view", workspaceId);
+
+    const record = await db.queryOne<EvidenceRecord>(
+      `
+      SELECT e.*, a.name as audit_name
+      FROM evidence e
+      JOIN audits a ON e.audit_id = a.id
+      WHERE e.id = $1 AND a.workspace_id = $2
+      `,
+      [evidenceId, workspaceId]
+    );
+
+    if (!record) {
+      return { success: false, error: "Evidence not found or unauthorized for this workspace" };
+    }
+
+    if (!record.storage_key) {
+      return { success: false, error: "This evidence item has no persistent binary storage" };
+    }
+
+    const downloadUrl = await storage.getSignedDownloadUrl({
+      key: record.storage_key,
+      filename: record.name,
+      workspaceId,
+      evidenceId: record.id,
+      expiresInSeconds: 900, // 15-minute expiration
+    });
+
+    return {
+      success: true,
+      downloadUrl,
+      filename: record.name,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to generate download authorization";
     return { success: false, error: message };
   }
 }

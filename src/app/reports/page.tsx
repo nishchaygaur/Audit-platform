@@ -27,6 +27,9 @@ import {
   deleteReport as deleteReportAction,
   type ReportRecord,
 } from "@/actions/reports";
+import { createAudit } from "@/actions/audits";
+import { downloadReportPdf } from "@/lib/pdf-generator";
+import AuditReportViewer from "@/components/reports/AuditReportViewer";
 
 type ReportStatus = "Completed" | "Generating" | "Failed";
 
@@ -107,7 +110,7 @@ function StatCard({
 
 export default function ReportsPage() {
   const { currentWorkspace } = useWorkspace();
-  const { audits } = useAudits();
+  const { audits, refreshAudits } = useAudits();
 
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,10 +187,24 @@ export default function ReportsPage() {
   async function handleGenerateReport() {
     if (!newReportName.trim() || !currentWorkspace?.id) return;
 
-    const targetAuditId = selectedAuditId || audits[0]?.id;
+    let targetAuditId = selectedAuditId || audits[0]?.id;
     if (!targetAuditId) {
-      alert("Please select or create an audit first before generating a report.");
-      return;
+      setGenerating(true);
+      const newAuditRes = await createAudit(currentWorkspace.id, {
+        name: `${newReportName.trim()} Baseline Audit`,
+        framework: newFramework || "ISO 27001",
+        status: "Fieldwork",
+        lead: "Lead Auditor",
+        startDate: new Date().toISOString().split("T")[0],
+      });
+      if (newAuditRes.success && newAuditRes.data) {
+        targetAuditId = newAuditRes.data.id;
+        await refreshAudits();
+      } else {
+        setGenerating(false);
+        alert(newAuditRes.error || "Please select or create an audit first before generating a report.");
+        return;
+      }
     }
 
     setGenerating(true);
@@ -525,6 +542,17 @@ export default function ReportsPage() {
                             </button>
 
                             <button
+                              onClick={() => downloadReportPdf(report)}
+                              disabled={report.status !== "Completed"}
+                              data-testid="row-download-pdf-button"
+                              className="rounded-md px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 inline-flex items-center gap-1"
+                              title="Download PDF"
+                            >
+                              <FileText size={14} />
+                              PDF
+                            </button>
+
+                            <button
                               onClick={() => handleDownloadReport(report)}
                               disabled={report.status !== "Completed"}
                               className="rounded-md p-2 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
@@ -609,6 +637,9 @@ export default function ReportsPage() {
                     }}
                     className="h-11 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-sm outline-none focus:border-slate-400"
                   >
+                    {audits.length === 0 && (
+                      <option value="">(Auto-create Baseline Audit)</option>
+                    )}
                     {audits.map((audit) => (
                       <option key={audit.id} value={audit.id}>
                         {audit.name} ({audit.framework})
@@ -691,117 +722,13 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Report Details Modal */}
+      {/* Human-Readable Report Viewer Modal */}
       {selectedReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-5">
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
-              <div className="flex gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                  <FileText size={21} />
-                </div>
-
-                <div>
-                  <h2 className="max-w-[400px] text-lg font-semibold text-slate-900">
-                    {selectedReport.name}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {selectedReport.id}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
-              >
-                <X size={19} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-px bg-slate-200">
-              <div className="bg-white p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Type
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.type}
-                </p>
-              </div>
-
-              <div className="bg-white p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Framework
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.framework}
-                </p>
-              </div>
-
-              <div className="bg-white p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Audit
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.audit_name || selectedReport.audit_id || "—"}
-                </p>
-              </div>
-
-              <div className="bg-white p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Status
-                </p>
-                <div className="mt-2">
-                  <StatusBadge status={selectedReport.status as ReportStatus} />
-                </div>
-              </div>
-
-              <div className="bg-white p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Generated By
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.generated_by}
-                </p>
-              </div>
-
-              <div className="bg-white p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  File Size
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-800">
-                  {selectedReport.size}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-              <button
-                onClick={() => handleDeleteReport(selectedReport.id)}
-                className="mr-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-              >
-                <Trash2 size={16} />
-                Delete
-              </button>
-
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Close
-              </button>
-
-              <button
-                onClick={() => handleDownloadReport(selectedReport)}
-                disabled={selectedReport.status !== "Completed"}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Download size={16} />
-                Download JSON
-              </button>
-            </div>
-          </div>
-        </div>
+        <AuditReportViewer
+          report={selectedReport}
+          onClose={() => setSelectedReport(null)}
+          onDownloadJson={handleDownloadReport}
+        />
       )}
     </div>
   );

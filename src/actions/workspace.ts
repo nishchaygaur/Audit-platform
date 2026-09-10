@@ -5,6 +5,8 @@ import { getSession } from "@/lib/auth";
 import { logAuditEvent } from "./audit-trail";
 import { type Role } from "@/lib/rbac";
 import { requirePermission, requireRoleManagement } from "@/lib/server-rbac";
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 export async function getUserWorkspaces() {
   const session = await getSession();
@@ -183,3 +185,144 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
     return { error: "Failed to remove member" };
   }
 }
+
+export async function createWorkspace(data: {
+  name: string;
+  description?: string;
+  framework?: string;
+  industry?: string;
+}) {
+  const session = await getSession();
+  if (!session || !session.user) {
+    return { error: "Unauthorized: Please sign in first" };
+  }
+
+  const name = data.name?.trim();
+  if (!name) {
+    return { error: "Workspace name is required" };
+  }
+
+  const workspaceId = crypto.randomUUID();
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        "INSERT INTO workspaces (id, name) VALUES ($1, $2)",
+        [workspaceId, name]
+      );
+
+      await tx.execute(
+        "INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3)",
+        [session.user.id, workspaceId, "Owner"]
+      );
+    });
+
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Workspace",
+      entityId: workspaceId,
+      description: `Created workspace "${name}"`,
+      details: {
+        workspaceId,
+        name,
+        description: data.description || "",
+        framework: data.framework || "ISO 27001",
+        industry: data.industry || "Technology & SaaS",
+      },
+    });
+
+    return {
+      success: true,
+      workspace: {
+        id: workspaceId,
+        name,
+        description: data.description || "",
+        role: "Owner",
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to create workspace";
+    return { error: message };
+  }
+}
+
+export async function createUserWithWorkspaceMember(params: {
+  workspaceId: string;
+  name: string;
+  email: string;
+  password?: string;
+  role: string;
+}) {
+  const { workspaceId, name, email, password, role } = params;
+  if (!workspaceId) return { error: "Workspace ID is required" };
+
+  let auth;
+  try {
+    auth = await requireRoleManagement(role as Role, workspaceId);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unauthorized";
+    return { error: message };
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase();
+  const trimmedName = name?.trim();
+  if (!normalizedEmail || !trimmedName) {
+    return { error: "Name and email are required" };
+  }
+
+  const rawPassword = password?.trim() || "Password123!";
+  const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Check if user already exists
+      let user = await tx.queryOne<{ id: string; name: string; email: string }>(
+        "SELECT id, name, email FROM users WHERE LOWER(email) = LOWER($1)",
+        [normalizedEmail]
+      );
+
+      let isNewUser = false;
+      if (!user) {
+        isNewUser = true;
+        const newUserId = crypto.randomUUID();
+        await tx.execute(
+          "INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, $5)",
+          [newUserId, trimmedName, normalizedEmail, hashedPassword, "Viewer"]
+        );
+        user = { id: newUserId, name: trimmedName, email: normalizedEmail };
+      }
+
+      // Check if already member of workspace
+      const existingMembership = await tx.queryOne<{ role: string }>(
+        "SELECT role FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2",
+        [user.id, workspaceId]
+      );
+
+      if (existingMembership) {
+        throw new Error("User is already a member of this workspace");
+      }
+
+      await tx.execute(
+        "INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3)",
+        [user.id, workspaceId, role]
+      );
+
+      return { user, isNewUser };
+    });
+
+    await logAuditEvent({
+      workspaceId,
+      action: "CREATE",
+      entityType: "Member",
+      entityId: result.user.id,
+      description: `${result.isNewUser ? "Created user and assigned" : "Assigned"} member ${result.user.name} (${result.user.email}) with role ${role}`,
+      details: { memberId: result.user.id, email: result.user.email, role, isNewUser: result.isNewUser },
+    });
+
+    return { success: true, user: result.user };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to add member";
+    return { error: message };
+  }
+}
+

@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { getWorkspaceMembers } from "@/actions/workspace";
+import { getAudits } from "@/actions/audits";
 
 type TaskStatus =
   | "Open"
@@ -354,6 +356,34 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const [form, setForm] = useState(emptyTask);
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [workspaceAudits, setWorkspaceAudits] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadData() {
+      if (!currentWorkspace?.id) return;
+      try {
+        const [membersRes, auditsRes] = await Promise.all([
+          getWorkspaceMembers(currentWorkspace.id),
+          getAudits(currentWorkspace.id),
+        ]);
+        if (cancelled) return;
+        if (membersRes) {
+          setWorkspaceMembers(membersRes.map((m) => ({ id: m.id, name: m.name, role: m.role })));
+        }
+        if (auditsRes.success && auditsRes.data) {
+          setWorkspaceAudits(auditsRes.data.map((a) => ({ id: a.id, name: a.name })));
+        }
+      } catch (err) {
+        console.error("Failed to load members or audits in tasks:", err);
+      }
+    }
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspace?.id]);
   const inputClass =
   "w-full h-9 rounded-lg border border-slate-200 px-2.5 text-[12px] text-slate-700 outline-none bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
 
@@ -818,14 +848,24 @@ export default function TasksPage() {
               </FormField>
 
               <FormField label="Owner">
-                <input
+                <select
                   value={form.owner}
                   onChange={(e) =>
                     setForm({ ...form, owner: e.target.value })
                   }
-                  placeholder="Enter owner"
                   className={inputClass}
-                />
+                  data-testid="task-owner-select"
+                >
+                  <option value="">-- Select Owner --</option>
+                  {workspaceMembers.map((m) => (
+                    <option key={m.id} value={m.name}>
+                      {m.name} ({m.role})
+                    </option>
+                  ))}
+                  {form.owner && !workspaceMembers.some((m) => m.name === form.owner) && (
+                    <option value={form.owner}>{form.owner}</option>
+                  )}
+                </select>
               </FormField>
 
               <FormField label="Type">
@@ -847,14 +887,24 @@ export default function TasksPage() {
               </FormField>
 
               <FormField label="Reference">
-                <input
+                <select
                   value={form.reference}
                   onChange={(e) =>
                     setForm({ ...form, reference: e.target.value })
                   }
-                  placeholder="AUD-2024-001"
                   className={inputClass}
-                />
+                  data-testid="task-reference-select"
+                >
+                  <option value="">-- Select Audit Reference --</option>
+                  {workspaceAudits.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.id} - {a.name}
+                    </option>
+                  ))}
+                  {form.reference && !workspaceAudits.some((a) => a.id === form.reference) && (
+                    <option value={form.reference}>{form.reference}</option>
+                  )}
+                </select>
               </FormField>
 
               <FormField label="Priority">

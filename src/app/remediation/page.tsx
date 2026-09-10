@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { getFindings, type FindingRecord } from "@/actions/findings";
+import { getRisks, type RiskRecord } from "@/actions/risks";
+import { getWorkspaceMembers } from "@/actions/workspace";
 
 type RemediationStatus =
   | "Open"
@@ -238,9 +241,81 @@ export default function RemediationPage() {
 
   const workspaceKey = currentWorkspace?.id || "abc-technologies";
 
-  const remediations =
-    workspaceRemediations[workspaceKey] ||
-    workspaceRemediations["abc-technologies"];
+  const [remediations, setRemediations] = useState<Remediation[]>(
+    workspaceRemediations[workspaceKey] || workspaceRemediations["abc-technologies"]
+  );
+
+  useEffect(() => {
+    setRemediations(
+      workspaceRemediations[workspaceKey] || [
+        {
+          id: "REM-2024-001",
+          title: "Enable MFA for privileged accounts",
+          description: "Enable multi-factor authentication for all privileged and administrative accounts.",
+          findingId: "FND-2024-001",
+          riskId: "RSK-2024-001",
+          framework: "ISO 27001",
+          priority: "Critical",
+          owner: "Alice Smith",
+          dueDate: "31 May 2024",
+          status: "In Progress",
+          progress: 65,
+          createdDate: "06 May 2024",
+        },
+      ]
+    );
+  }, [workspaceKey]);
+
+  const [availableFindings, setAvailableFindings] = useState<{ id: string; reference: string; title: string }[]>([]);
+  const [availableRisks, setAvailableRisks] = useState<{ id: string; title: string }[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; role: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadData() {
+      if (!currentWorkspace?.id) return;
+      try {
+        const [findingsRes, risksRes, membersRes] = await Promise.all([
+          getFindings(currentWorkspace.id),
+          getRisks(currentWorkspace.id),
+          getWorkspaceMembers(currentWorkspace.id),
+        ]);
+        if (cancelled) return;
+        if (findingsRes.success && findingsRes.data) {
+          setAvailableFindings(
+            (findingsRes.data as FindingRecord[]).map((f) => ({
+              id: f.id,
+              reference: f.reference,
+              title: f.title,
+            }))
+          );
+        }
+        if (risksRes.success && risksRes.data) {
+          setAvailableRisks(
+            (risksRes.data as RiskRecord[]).map((r) => ({
+              id: r.id,
+              title: r.title,
+            }))
+          );
+        }
+        if (membersRes) {
+          setWorkspaceMembers(
+            membersRes.map((m) => ({
+              id: m.id,
+              name: m.name,
+              role: m.role,
+            }))
+          );
+        }
+      } catch (e) {
+        console.error("Failed to load remediation dropdown data:", e);
+      }
+    }
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspace?.id]);
 
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<
@@ -252,6 +327,51 @@ export default function RemediationPage() {
   const [selectedRemediation, setSelectedRemediation] =
     useState<Remediation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Form states
+  const [formTitle, setFormTitle] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formFindingId, setFormFindingId] = useState("");
+  const [formRiskId, setFormRiskId] = useState("");
+  const [formFramework, setFormFramework] = useState("ISO 27001");
+  const [formPriority, setFormPriority] = useState<Priority>("High");
+  const [formOwner, setFormOwner] = useState("");
+  const [formDueDate, setFormDueDate] = useState("");
+
+  function handleOpenAddModal() {
+    setFormTitle("");
+    setFormDescription("");
+    setFormFindingId(availableFindings[0]?.reference || availableFindings[0]?.id || "");
+    setFormRiskId(availableRisks[0]?.id || "");
+    setFormOwner(workspaceMembers[0]?.name || "");
+    setFormFramework("ISO 27001");
+    setFormPriority("High");
+    setFormDueDate("");
+    setShowAddModal(true);
+  }
+
+  function handleCreateAction(e: React.FormEvent) {
+    e.preventDefault();
+    if (!formTitle.trim()) return;
+
+    const newRem: Remediation = {
+      id: `REM-${Date.now().toString().slice(-4)}`,
+      title: formTitle.trim(),
+      description: formDescription.trim() || "Remediation action details.",
+      findingId: formFindingId || (availableFindings[0]?.reference || "FND-001"),
+      riskId: formRiskId || (availableRisks[0]?.id || "RSK-001"),
+      framework: formFramework,
+      priority: formPriority,
+      owner: formOwner || (workspaceMembers[0]?.name || "Auditor User"),
+      dueDate: formDueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+      status: "Open",
+      progress: 0,
+      createdDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+    };
+
+    setRemediations((prev) => [newRem, ...prev]);
+    setShowAddModal(false);
+  }
 
   const filteredRemediations = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -326,7 +446,7 @@ export default function RemediationPage() {
           </div>
 
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
             <Plus className="h-4 w-4" />
@@ -624,7 +744,6 @@ export default function RemediationPage() {
                 <p className="text-sm font-semibold text-slate-900">
                   Remediation Progress
                 </p>
-
                 <span className="text-sm font-bold text-slate-700">
                   {selectedRemediation.progress}%
                 </span>
@@ -641,7 +760,7 @@ export default function RemediationPage() {
             </div>
           </div>
 
-          <div className="flex justifynd border-t border-slate-200 px-6 py-4">
+          <div className="flex justify-end border-t border-slate-200 px-6 py-4">
             <button
               onClick={() => setSelectedRemediation(null)}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -655,120 +774,173 @@ export default function RemediationPage() {
       {/* Add Remediation Modal */}
       {showAddModal && (
         <Modal onClose={() => setShowAddModal(false)}>
-          <div className="border-b border-slate-200 px-6 py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Add Remediation Action
-                </h2>
+          <form onSubmit={handleCreateAction}>
+            <div className="border-b border-slate-200 px-6 py-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Add Remediation Action
+                  </h2>
 
-                <p className="mt-1 text-xs text-slate-500">
-                  Create a corrective action for the workspace.
-                </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Create a corrective action for the workspace.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-5 px-6 py-6">
+              <FormField label="Remediation Title">
+                <input
+                  required
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="Enter remediation title"
+                  className="form-input"
+                  data-testid="remediation-title-input"
+                />
+              </FormField>
+
+              <FormField label="Description">
+                <textarea
+                  rows={3}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="Describe the corrective action..."
+                  className="form-input resize-none py-2"
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Finding ID">
+                  <select
+                    value={formFindingId}
+                    onChange={(e) => setFormFindingId(e.target.value)}
+                    className="form-input"
+                    data-testid="remediation-finding-select"
+                  >
+                    <option value="">-- Select Finding --</option>
+                    {availableFindings.map((f) => (
+                      <option key={f.id} value={f.reference || f.id}>
+                        {f.reference ? `[${f.reference}] ` : ""}{f.title}
+                      </option>
+                    ))}
+                    {formFindingId && !availableFindings.some((f) => (f.reference || f.id) === formFindingId) && (
+                      <option value={formFindingId}>{formFindingId}</option>
+                    )}
+                  </select>
+                </FormField>
+
+                <FormField label="Risk ID">
+                  <select
+                    value={formRiskId}
+                    onChange={(e) => setFormRiskId(e.target.value)}
+                    className="form-input"
+                    data-testid="remediation-risk-select"
+                  >
+                    <option value="">-- Select Risk --</option>
+                    {availableRisks.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.id.length > 10 ? `[${r.id.slice(0, 8)}] ` : `[${r.id}] `}{r.title}
+                      </option>
+                    ))}
+                    {formRiskId && !availableRisks.some((r) => r.id === formRiskId) && (
+                      <option value={formRiskId}>{formRiskId}</option>
+                    )}
+                  </select>
+                </FormField>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Framework">
+                  <select
+                    value={formFramework}
+                    onChange={(e) => setFormFramework(e.target.value)}
+                    className="form-input"
+                  >
+                    <option>ISO 27001</option>
+                    <option>NIST CSF</option>
+                    <option>NIST 800-53</option>
+                    <option>NIST RMF</option>
+                    <option>SOC 2</option>
+                  </select>
+                </FormField>
+
+                <FormField label="Priority">
+                  <select
+                    value={formPriority}
+                    onChange={(e) => setFormPriority(e.target.value as Priority)}
+                    className="form-input"
+                  >
+                    <option>Critical</option>
+                    <option>High</option>
+                    <option>Medium</option>
+                    <option>Low</option>
+                  </select>
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Owner">
+                  <select
+                    value={formOwner}
+                    onChange={(e) => setFormOwner(e.target.value)}
+                    className="form-input"
+                    data-testid="remediation-owner-select"
+                  >
+                    <option value="">-- Select Owner --</option>
+                    {workspaceMembers.map((m) => (
+                      <option key={m.id} value={m.name}>
+                        {m.name} ({m.role})
+                      </option>
+                    ))}
+                    {formOwner && !workspaceMembers.some((m) => m.name === formOwner) && (
+                      <option value={formOwner}>{formOwner}</option>
+                    )}
+                  </select>
+                </FormField>
+
+                <FormField label="Due Date">
+                  <input
+                    type="date"
+                    value={formDueDate}
+                    onChange={(e) => setFormDueDate(e.target.value)}
+                    className="form-input"
+                  />
+                </FormField>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
+                type="button"
                 onClick={() => setShowAddModal(false)}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
-                <X className="h-5 w-5" />
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Create Action
               </button>
             </div>
-          </div>
-
-          <div className="space-y-5 px-6 py-6">
-            <FormField label="Remediation Title">
-              <input
-                placeholder="Enter remediation title"
-                className="form-input"
-              />
-            </FormField>
-
-            <FormField label="Description">
-              <textarea
-                rows={3}
-                placeholder="Describe the corrective action..."
-                className="form-input resize-none py-2"
-              />
-            </FormField>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Finding ID">
-                <input
-                  placeholder="e.g. FND-2024-001"
-                  className="form-input"
-                />
-              </FormField>
-
-              <FormField label="Risk ID">
-                <input
-                  placeholder="e.g. RSK-2024-001"
-                  className="form-input"
-                />
-              </FormField>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Framework">
-                <select className="form-input">
-                  <option>ISO 27001</option>
-                  <option>NIST CSF</option>
-                  <option>NIST 800-53</option>
-                  <option>NIST RMF</option>
-                  <option>SOC 2</option>
-                </select>
-              </FormField>
-
-              <FormField label="Priority">
-                <select className="form-input">
-                  <option>Critical</option>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
-                </select>
-              </FormField>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Owner">
-                <select className="form-input">
-                  <option>Alice Smith</option>
-                  <option>John Carter</option>
-                  <option>Emily Davis</option>
-                  <option>Michael Lee</option>
-                  <option>Sarah Brown</option>
-                  <option>David Wilson</option>
-                </select>
-              </FormField>
-
-              <FormField label="Due Date">
-                <input type="date" className="form-input" />
-              </FormField>
-            </div>
-          </div>
-
-          <div className="flex justifynd gap-3 border-t border-slate-200 px-6 py-4">
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              Create Action
-            </button>
-          </div>
+          </form>
         </Modal>
       )}
     </main>
   );
 }
-
-/* ---------- Components ---------- */
 
 function SummaryCard({
   title,

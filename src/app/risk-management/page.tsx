@@ -27,6 +27,7 @@ import {
   type RiskLevel,
   type RiskStatus,
 } from "@/actions/risks";
+import { getWorkspaceMembers } from "@/actions/workspace";
 
 type Risk = {
   id: string;
@@ -67,15 +68,17 @@ export default function RiskManagementPage() {
   const [newCategory, setNewCategory] = useState("Access Control");
   const [newFramework, setNewFramework] = useState("ISO 27001");
   const [newAsset, setNewAsset] = useState("Core Infrastructure");
-  const [newOwner, setNewOwner] = useState("Alice Smith");
+  const [newOwner, setNewOwner] = useState("");
   const [newLikelihood, setNewLikelihood] = useState(3);
   const [newImpact, setNewImpact] = useState(3);
   const [newTreatment, setNewTreatment] = useState("Mitigate");
   const [newDueDate, setNewDueDate] = useState("");
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; email: string; role: string }[]>([]);
 
   const loadRisks = useCallback(async () => {
     if (!currentWorkspace?.id) {
       setRisks([]);
+      setWorkspaceMembers([]);
       setLoading(false);
       return;
     }
@@ -83,7 +86,14 @@ export default function RiskManagementPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getRisks(currentWorkspace.id);
+      const [res, members] = await Promise.all([
+        getRisks(currentWorkspace.id),
+        getWorkspaceMembers(currentWorkspace.id),
+      ]);
+      if (members) {
+        setWorkspaceMembers(members);
+        setNewOwner((prev) => prev || (members.length > 0 ? members[0].name : ""));
+      }
       if (res.success && res.data) {
         const mapped: Risk[] = res.data.map((r: RiskRecord) => {
           const lNum = typeof r.likelihood === "string" ? parseInt(r.likelihood, 10) || 3 : 3;
@@ -634,13 +644,22 @@ export default function RiskManagementPage() {
                 </FormField>
 
                 <FormField label="Risk Owner">
-                  <input
-                    type="text"
+                  <select
                     value={newOwner}
                     onChange={(e) => setNewOwner(e.target.value)}
-                    placeholder="e.g. Alice Smith"
-                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-700 outline-none focus:border-slate-400"
-                  />
+                    data-testid="risk-owner-select"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-slate-400"
+                  >
+                    <option value="">-- Select Risk Owner --</option>
+                    {workspaceMembers.map((m) => (
+                      <option key={m.id} value={m.name}>
+                        {m.name} ({m.role})
+                      </option>
+                    ))}
+                    {newOwner && !workspaceMembers.some((m) => m.name === newOwner) && (
+                      <option value={newOwner}>{newOwner}</option>
+                    )}
+                  </select>
                 </FormField>
               </div>
 

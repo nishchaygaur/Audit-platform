@@ -113,6 +113,16 @@ export const POSTGRES_SCHEMA_SQL = `
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_password_resets_email ON password_resets(email);
+
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -205,7 +215,10 @@ export const POSTGRES_SCHEMA_SQL = `
     size TEXT DEFAULT '',
     framework TEXT DEFAULT '',
     reviewed_by TEXT DEFAULT '',
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    storage_key TEXT DEFAULT '',
+    mime_type TEXT DEFAULT 'application/octet-stream',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS audit_trail (
@@ -374,6 +387,12 @@ export async function ensureSchema(): Promise<void> {
     schemaInitialized = (async () => {
       const pool = getPool();
       await pool.query(POSTGRES_SCHEMA_SQL);
+      // Idempotent column migrations for evidence storage
+      await pool.query(`
+        ALTER TABLE evidence ADD COLUMN IF NOT EXISTS storage_key TEXT DEFAULT '';
+        ALTER TABLE evidence ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'application/octet-stream';
+        ALTER TABLE evidence ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+      `).catch(() => {});
       await seedBaselineData(pool);
     })().catch((err) => {
       schemaInitialized = null;

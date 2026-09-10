@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { hasPermission } from "@/lib/rbac";
 import { signOut } from "@/actions/auth";
+import { createWorkspace } from "@/actions/workspace";
 
 
 import {
@@ -123,6 +124,7 @@ export default function Sidebar() {  const { user } = useAuth();
     workspaces,
     currentWorkspace,
     setWorkspace,
+    addWorkspace,
   } = useWorkspace();
 
   const router = useRouter();
@@ -138,6 +140,8 @@ export default function Sidebar() {  const { user } = useAuth();
   const [newWorkspaceDesc, setNewWorkspaceDesc] = useState("");
   const [newWorkspaceFramework, setNewWorkspaceFramework] = useState("ISO 27001");
   const [newWorkspaceIndustry, setNewWorkspaceIndustry] = useState("Technology & SaaS");
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const workspaceRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -175,15 +179,38 @@ export default function Sidebar() {  const { user } = useAuth();
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
-  function handleCreateWorkspace(e: React.FormEvent) {
+  async function handleCreateWorkspace(e: React.FormEvent) {
     e.preventDefault();
-    if (!newWorkspaceName.trim()) return;
+    if (!newWorkspaceName.trim() || creatingWorkspace) return;
 
+    setCreatingWorkspace(true);
+    setCreateError("");
+    try {
+      const res = await createWorkspace({
+        name: newWorkspaceName.trim(),
+        description: newWorkspaceDesc.trim(),
+        framework: newWorkspaceFramework,
+        industry: newWorkspaceIndustry,
+      });
 
-    setNewWorkspaceName("");
-    setNewWorkspaceDesc("");
-    setShowCreateModal(false);
-    setWorkspaceOpen(false);
+      if (res.error || !res.workspace) {
+        setCreateError(res.error || "Failed to create workspace");
+        setCreatingWorkspace(false);
+        return;
+      }
+
+      addWorkspace(res.workspace);
+      setNewWorkspaceName("");
+      setNewWorkspaceDesc("");
+      setShowCreateModal(false);
+      setWorkspaceOpen(false);
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setCreateError("An unexpected error occurred while creating workspace");
+    } finally {
+      setCreatingWorkspace(false);
+    }
   }
 
   async function handleLogout() {
@@ -224,8 +251,17 @@ export default function Sidebar() {  const { user } = useAuth();
             WORKSPACE SELECTOR
         ====================================================== */}
         <div ref={workspaceRef} className="relative shrink-0 px-3.5 pb-2">
-          <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Active Workspace
+          <div className="mb-1 flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span>Active Workspace</span>
+            <button
+              type="button"
+              data-testid="add-workspace-button"
+              onClick={() => setShowCreateModal(true)}
+              className="text-blue-400 transition hover:text-white"
+              title="Create Workspace"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
           </div>
 
           <button
@@ -548,7 +584,7 @@ export default function Sidebar() {  const { user } = useAuth();
                 </div>
                 <div>
                   <h3 className="text-[15px] font-semibold text-slate-900">
-                    Create New Workspace
+                    Create Workspace
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     Set up an isolated GRC governance environment
@@ -572,9 +608,10 @@ export default function Sidebar() {  const { user } = useAuth();
                 <input
                   type="text"
                   required
+                  data-testid="workspace-name-input"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  placeholder="e.g. Acme FinTech, Globex Cloud"
+                  placeholder="e.g. Acme Corporation, North America Ops"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
@@ -621,12 +658,19 @@ export default function Sidebar() {  const { user } = useAuth();
                 </label>
                 <textarea
                   rows={2}
+                  data-testid="workspace-desc-input"
                   value={newWorkspaceDesc}
                   onChange={(e) => setNewWorkspaceDesc(e.target.value)}
-                  placeholder="e.g. Production cloud infrastructure, payment services, customer data stores..."
+                  placeholder="Optional description of this workspace..."
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12.5px] outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
+
+              {createError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-[11px] text-red-600">
+                  {createError}
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
@@ -638,10 +682,12 @@ export default function Sidebar() {  const { user } = useAuth();
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[12px] font-semibold text-white shadow-sm hover:bg-blue-700"
+                  data-testid="create-workspace-submit-button"
+                  disabled={creatingWorkspace}
+                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[12px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  Create & Launch
+                  {creatingWorkspace ? "Creating..." : "Create Workspace"}
                 </button>
               </div>
             </form>

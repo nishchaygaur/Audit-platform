@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
+import Header from "@/components/layout/Header";
 import {
   getAuditTrail,
   getAuditTrailStats,
@@ -348,7 +349,9 @@ export default function AuditTrailPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 space-y-6">
+    <div className="min-h-screen bg-[#f6f8fc] pl-[250px]">
+      <Header />
+      <main className="p-6 space-y-6">
       {/* ============================================================
           TOP HEADER
       ============================================================ */}
@@ -1043,6 +1046,7 @@ export default function AuditTrailPage() {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

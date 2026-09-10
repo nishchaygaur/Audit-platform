@@ -28,7 +28,7 @@ import {
   deleteAuditPlan,
 } from "@/actions/audit-plans";
 
-type PlanStatus = "Draft" | "Active" | "Completed" | "Archived";
+type PlanStatus = "Draft" | "Approved" | "In Progress" | "Active" | "Completed" | "Archived";
 
 type AuditPlan = {
   id: string;
@@ -54,6 +54,8 @@ const FRAMEWORKS = [
 
 const STATUS_OPTIONS: PlanStatus[] = [
   "Draft",
+  "Approved",
+  "In Progress",
   "Active",
   "Completed",
   "Archived",
@@ -91,7 +93,10 @@ export default function AuditPlansPage() {
     useState<PlanStatus>("Draft");
 
   const loadPlans = async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const res = await getAuditPlans(workspaceId);
     if (res.success && res.data) {
@@ -596,8 +601,10 @@ function PlanRow({
       : 0;
 
   const statusClass =
-    plan.status === "Active"
+    plan.status === "Approved" || plan.status === "Active"
       ? "bg-emerald-50 text-emerald-700"
+      : plan.status === "In Progress"
+        ? "bg-indigo-50 text-indigo-700"
       : plan.status === "Completed"
         ? "bg-blue-50 text-blue-700"
         : plan.status === "Draft"
@@ -951,6 +958,7 @@ function SelectField({
       </label>
 
       <select
+        data-testid={`select-${label.toLowerCase().replace(/\s+/g, '-')}`}
         value={value}
         onChange={(event) =>
           onChange(event.target.value)
