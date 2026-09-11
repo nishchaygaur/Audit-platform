@@ -7,9 +7,12 @@ import { headers } from 'next/headers';
 
 async function getOrigin(): Promise<string> {
   const headersList = await headers();
-  const host = headersList.get('host');
+  const host = headersList.get('x-forwarded-host') || headersList.get('host');
   const proto = headersList.get('x-forwarded-proto') || (host?.includes('localhost') ? 'http' : 'https');
-  return process.env.NEXT_PUBLIC_SITE_URL || (host ? `${proto}://${host}` : 'https://auditplatform-nu.vercel.app');
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return process.env.NEXT_PUBLIC_SITE_URL || 'https://auditplatform-nu.vercel.app';
 }
 
 export type AuthActionResult = {

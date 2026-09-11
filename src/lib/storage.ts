@@ -1,12 +1,5 @@
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import fs from "fs";
-import fsp from "fs/promises";
+import { createClient as createSupabaseClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import path from "path";
 import crypto from "crypto";
 
@@ -31,56 +24,69 @@ export interface SignedDownloadOptions {
   expiresInSeconds?: number;
 }
 
-// Environment variables configuration (consistent across application)
-const S3_ENDPOINT = process.env.S3_ENDPOINT;
-const S3_REGION = process.env.S3_REGION || "us-east-1";
-const S3_BUCKET = process.env.S3_BUCKET;
-const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID;
-const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY;
+export const EVIDENCE_BUCKET = "evidence";
+
 const JWT_SECRET = process.env.JWT_SECRET || "development-audit-platform-secret-key-32-chars-min";
 
-// Local storage directory fallback when S3 credentials are not configured
-const LOCAL_STORAGE_DIR = path.resolve(process.cwd(), ".storage", "evidence");
-
-export function isS3Configured(): boolean {
-  return Boolean(S3_BUCKET && S3_ACCESS_KEY_ID && S3_SECRET_ACCESS_KEY);
-}
-
-let s3ClientInstance: S3Client | null = null;
-
-function getS3Client(): S3Client {
-  if (!s3ClientInstance) {
-    s3ClientInstance = new S3Client({
-      region: S3_REGION,
-      endpoint: S3_ENDPOINT || undefined,
-      credentials: {
-        accessKeyId: S3_ACCESS_KEY_ID || "",
-        secretAccessKey: S3_SECRET_ACCESS_KEY || "",
-      },
-      forcePathStyle: Boolean(S3_ENDPOINT), // Required for MinIO / LocalStack / Cloudflare R2
-    });
-  }
-  return s3ClientInstance;
-}
+let adminStorageClient: SupabaseClient | null = null;
 
 /**
- * Ensures the local storage directory exists
+ * Returns a Supabase client for server-side Storage operations.
+ * Prioritizes the server-side SUPABASE_SERVICE_ROLE_KEY for administrative operations
+ * behind authoritative application-level RBAC, and falls back to the authenticated
+ * SSR server client.
  */
-async function ensureLocalStorageDir(subdir = ""): Promise<string> {
-  const targetDir = path.join(LOCAL_STORAGE_DIR, subdir);
-  if (!fs.existsSync(targetDir)) {
-    await fsp.mkdir(targetDir, { recursive: true });
+export async function getStorageClient(): Promise<SupabaseClient> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (serviceRoleKey) {
+    if (!adminStorageClient) {
+      adminStorageClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+    }
+    return adminStorageClient;
   }
-  return targetDir;
+
+  // Fallback: use authenticated server client with session cookies
+  return (await createServerClient()) as unknown as SupabaseClient;
 }
 
 /**
- * Generate a cryptographically unguessable object key scoped to tenant and audit
+ * Normalizes a storage key into bucket name and relative object path.
+ * Handles keys whether prefixed with 'evidence/' or not.
+ */
+export function getBucketAndPath(storageKey: string): { bucket: string; path: string } {
+  let cleanKey = storageKey.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (cleanKey.startsWith(`${EVIDENCE_BUCKET}/`)) {
+    cleanKey = cleanKey.slice(`${EVIDENCE_BUCKET}/`.length);
+  }
+  return {
+    bucket: EVIDENCE_BUCKET,
+    path: cleanKey,
+  };
+}
+
+/**
+ * Generate a cryptographically unguessable, collision-safe object key scoped to workspace and audit.
+ * Enforces strict sanitization to prevent path traversal attacks.
+ * Structure: evidence/{workspaceId}/{auditId}/{uniqueId}-{sanitizedFileName}
  */
 export function generateStorageKey(workspaceId: string, auditId: string, filename: string): string {
-  const sanitized = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const randomBytes = crypto.randomUUID();
-  return `workspaces/${workspaceId}/audits/${auditId}/${randomBytes}-${sanitized}`;
+  // Prevent directory traversal: isolate base file name only
+  const baseName = path.basename(filename.replace(/\\/g, "/"));
+  // Sanitize characters: allow alphanumeric, dot, underscore, dash
+  const sanitized = baseName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/^\.+/, "");
+  const safeFileName = sanitized || "evidence_file";
+  const uniqueId = crypto.randomUUID();
+  const safeWorkspace = workspaceId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const safeAudit = auditId.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  return `evidence/${safeWorkspace}/${safeAudit}/${uniqueId}-${safeFileName}`;
 }
 
 /**
@@ -113,152 +119,94 @@ export function verifyDownloadToken(
 }
 
 /**
- * Stores binary file content in persistent object storage
+ * Stores binary file content in persistent Supabase Storage.
  */
 export async function putObject(options: StoragePutOptions): Promise<void> {
   const { key, body, contentType } = options;
+  const { bucket, path: objectPath } = getBucketAndPath(key);
+  const client = await getStorageClient();
 
-  if (isS3Configured()) {
-    const client = getS3Client();
-    await client.send(
-      new PutObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
-        Metadata: options.metadata,
-      })
-    );
-  } else {
-    // Local persistent disk storage fallback
-    const filePath = path.join(LOCAL_STORAGE_DIR, key);
-    await ensureLocalStorageDir(path.dirname(key));
-    await fsp.writeFile(filePath, body);
+  const { error } = await client.storage
+    .from(bucket)
+    .upload(objectPath, body, {
+      contentType: contentType || "application/octet-stream",
+      upsert: true,
+    });
 
-    // Save contentType metadata
-    const metaPath = `${filePath}.meta.json`;
-    await fsp.writeFile(
-      metaPath,
-      JSON.stringify({
-        contentType,
-        size: body.length,
-        createdAt: new Date().toISOString(),
-      }),
-      "utf8"
-    );
+  if (error) {
+    console.error("[Storage] Failed to upload object to Supabase Storage:", error.message);
+    throw new Error(`Supabase Storage upload failed: ${error.message}`);
   }
 }
 
 /**
- * Retrieves binary file content from persistent object storage
+ * Retrieves binary file content from persistent Supabase Storage.
  */
 export async function getObject(key: string): Promise<StorageGetResult> {
-  if (isS3Configured()) {
-    const client = getS3Client();
-    const response = await client.send(
-      new GetObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: key,
-      })
-    );
+  const { bucket, path: objectPath } = getBucketAndPath(key);
+  const client = await getStorageClient();
 
-    if (!response.Body) {
-      throw new Error(`Object not found in S3 storage: ${key}`);
-    }
+  const { data, error } = await client.storage
+    .from(bucket)
+    .download(objectPath);
 
-    const byteArray = await response.Body.transformToByteArray();
-    return {
-      body: Buffer.from(byteArray),
-      contentType: response.ContentType || "application/octet-stream",
-      contentLength: response.ContentLength || byteArray.length,
-    };
-  } else {
-    // Local persistent disk storage fallback
-    const filePath = path.join(LOCAL_STORAGE_DIR, key);
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`Object not found in local persistent storage: ${key}`);
-    }
-
-    const body = await fsp.readFile(filePath);
-    let contentType = "application/octet-stream";
-
-    const metaPath = `${filePath}.meta.json`;
-    if (fs.existsSync(metaPath)) {
-      try {
-        const meta = JSON.parse(await fsp.readFile(metaPath, "utf8"));
-        if (meta.contentType) {
-          contentType = meta.contentType;
-        }
-      } catch {
-        // use default
-      }
-    }
-
-    return {
-      body,
-      contentType,
-      contentLength: body.length,
-    };
+  if (error || !data) {
+    console.error("[Storage] Failed to download object from Supabase Storage:", error?.message);
+    throw new Error(`Object not found in Supabase Storage: ${key} (${error?.message || "Not found"})`);
   }
+
+  const arrayBuffer = await data.arrayBuffer();
+  const body = Buffer.from(arrayBuffer);
+
+  return {
+    body,
+    contentType: data.type || "application/octet-stream",
+    contentLength: body.length,
+  };
 }
 
 /**
- * Deletes an object from persistent storage
+ * Deletes an object from persistent Supabase Storage.
  */
 export async function deleteObject(key: string): Promise<void> {
   if (!key) return;
+  const { bucket, path: objectPath } = getBucketAndPath(key);
+  const client = await getStorageClient();
 
-  if (isS3Configured()) {
-    const client = getS3Client();
-    await client.send(
-      new DeleteObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: key,
-      })
-    );
-  } else {
-    const filePath = path.join(LOCAL_STORAGE_DIR, key);
-    if (fs.existsSync(filePath)) {
-      await fsp.unlink(filePath).catch(() => {});
-    }
-    const metaPath = `${filePath}.meta.json`;
-    if (fs.existsSync(metaPath)) {
-      await fsp.unlink(metaPath).catch(() => {});
-    }
+  const { error } = await client.storage
+    .from(bucket)
+    .remove([objectPath]);
+
+  if (error) {
+    console.warn("[Storage] Warning deleting object from Supabase Storage:", error.message);
   }
 }
 
 /**
- * Generates an authenticated, short-lived signed download URL
- * Enforces 15-minute expiration (900 seconds)
+ * Generates an authenticated, short-lived signed download URL via Supabase Storage.
+ * Enforces 15-minute expiration (900 seconds) by default.
  */
 export async function getSignedDownloadUrl(options: SignedDownloadOptions): Promise<string> {
-  const { key, filename, workspaceId, evidenceId, expiresInSeconds = 900 } = options;
+  const { key, filename, expiresInSeconds = 900 } = options;
+  const { bucket, path: objectPath } = getBucketAndPath(key);
+  const client = await getStorageClient();
 
-  if (isS3Configured()) {
-    const client = getS3Client();
-    const command = new GetObjectCommand({
-      Bucket: S3_BUCKET,
-      Key: key,
-      ResponseContentDisposition: `attachment; filename="${encodeURIComponent(filename)}"`,
-    });
-    return await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
-  } else {
-    // Generate secure HMAC-signed application endpoint
-    const expires = Date.now() + expiresInSeconds * 1000;
-    const token = generateDownloadToken(key, workspaceId, evidenceId, expires);
-
-    const queryParams = new URLSearchParams({
-      key,
-      workspaceId,
-      evidenceId,
-      expires: expires.toString(),
-      token,
-      filename,
+  const { data, error } = await client.storage
+    .from(bucket)
+    .createSignedUrl(objectPath, expiresInSeconds, {
+      download: filename,
     });
 
-    return `/api/evidence/download?${queryParams.toString()}`;
+  if (error || !data?.signedUrl) {
+    console.error("[Storage] Failed to create signed URL from Supabase Storage:", error?.message);
+    throw new Error(`Failed to generate signed download URL: ${error?.message || "Unknown error"}`);
   }
+
+  return data.signedUrl;
+}
+
+export function isS3Configured(): boolean {
+  return false;
 }
 
 export const storage = {

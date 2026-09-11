@@ -7,13 +7,14 @@ export const dynamic = 'force-dynamic';
 
 function getRedirectUrl(request: NextRequest, targetPath: string): string {
   const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto');
   const origin = request.nextUrl.origin;
   const isLocalEnv = process.env.NODE_ENV === 'development';
 
   const base = isLocalEnv
     ? origin
     : forwardedHost
-    ? `https://${forwardedHost}`
+    ? `${forwardedProto || 'https'}://${forwardedHost}`
     : origin;
 
   return `${base}${targetPath}`;
@@ -71,9 +72,17 @@ export async function GET(request: NextRequest) {
     if (error || !data?.user) {
       console.error('[Auth Callback] Code exchange failed:', error?.message);
       await supabase.auth.signOut().catch(() => {});
-      const isExpired = error?.message.toLowerCase().includes('expired') || false;
-      const errCode = isExpired ? 'otp_expired' : 'auth_callback_failed';
-      return NextResponse.redirect(getRedirectUrl(request, `/signin?error=${errCode}`));
+      const isExpired = error?.message?.toLowerCase().includes('expired') || false;
+      const isPkceMissing =
+        error?.message?.toLowerCase().includes('verifier') ||
+        error?.message?.toLowerCase().includes('pkce');
+      const errCode = isExpired
+        ? 'otp_expired'
+        : isPkceMissing
+        ? 'pkce_verifier_missing'
+        : 'auth_callback_failed';
+      const descParam = error?.message ? `&error_description=${encodeURIComponent(error.message)}` : '';
+      return NextResponse.redirect(getRedirectUrl(request, `/signin?error=${errCode}${descParam}`));
     }
 
     try {
@@ -98,9 +107,10 @@ export async function GET(request: NextRequest) {
     if (error || !data?.user) {
       console.error('[Auth Callback] verifyOtp failed:', error?.message);
       await supabase.auth.signOut().catch(() => {});
-      const isExpired = error?.message.toLowerCase().includes('expired') || false;
+      const isExpired = error?.message?.toLowerCase().includes('expired') || false;
       const errCode = isExpired ? 'otp_expired' : 'auth_callback_failed';
-      return NextResponse.redirect(getRedirectUrl(request, `/signin?error=${errCode}`));
+      const descParam = error?.message ? `&error_description=${encodeURIComponent(error.message)}` : '';
+      return NextResponse.redirect(getRedirectUrl(request, `/signin?error=${errCode}${descParam}`));
     }
 
     try {

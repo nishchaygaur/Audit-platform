@@ -644,48 +644,55 @@ export async function uploadEvidenceFile(
       },
     });
 
-    // 4. ONLY AFTER BINARY STORAGE SUCCEEDS, INSERT METADATA RECORD IN NEON POSTGRESQL
+    // 4. ONLY AFTER BINARY STORAGE SUCCEEDS, INSERT METADATA RECORD IN NEON POSTGRESQL (WITH STORAGE ROLLBACK ON FAILURE)
     const id = `EVD-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
     const date = new Date().toISOString().split("T")[0];
 
-    await db.execute(
-      `
-      INSERT INTO evidence (
-        id, workspace_id, audit_id, reference, name, type, control,
-        uploaded_by, date, status, description, size, framework, reviewed_by,
-        storage_key, mime_type
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-      `,
-      [
-        id,
-        workspaceId,
-        auditId,
-        reference,
-        file.name,
-        type,
-        control,
-        uploadedBy,
-        date,
-        status,
-        description,
-        sizeFormatted,
-        framework,
-        "—",
-        storageKey,
-        mimeType,
-      ]
-    );
+    try {
+      await db.execute(
+        `
+        INSERT INTO evidence (
+          id, workspace_id, audit_id, reference, name, type, control,
+          uploaded_by, date, status, description, size, framework, reviewed_by,
+          storage_key, mime_type
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        `,
+        [
+          id,
+          workspaceId,
+          auditId,
+          reference,
+          file.name,
+          type,
+          control,
+          uploadedBy,
+          date,
+          status,
+          description,
+          sizeFormatted,
+          framework,
+          "—",
+          storageKey,
+          mimeType,
+        ]
+      );
 
-    // Sync audit evidence counter
-    await db.execute(
-      `
-      UPDATE audits
-      SET evidence = (SELECT COUNT(*) FROM evidence WHERE audit_id = $1)
-      WHERE id = $2
-      `,
-      [auditId, auditId]
-    );
+      // Sync audit evidence counter
+      await db.execute(
+        `
+        UPDATE audits
+        SET evidence = (SELECT COUNT(*) FROM evidence WHERE audit_id = $1)
+        WHERE id = $2
+        `,
+        [auditId, auditId]
+      );
+    } catch (dbErr) {
+      // Roll back uploaded storage object to prevent orphaned files
+      console.error("[Evidence Upload] Database insert failed, rolling back uploaded storage object:", dbErr);
+      await storage.deleteObject(storageKey).catch(() => {});
+      throw dbErr;
+    }
 
     const record: EvidenceRecord = {
       id,

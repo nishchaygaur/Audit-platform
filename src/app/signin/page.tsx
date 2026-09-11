@@ -2,7 +2,8 @@
 import { FormEvent, useState, useEffect } from "react";
 import { ShieldCheck, Eye, EyeOff, Lock, Mail, User, X, CheckCircle2, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { signIn, signUp, requestPasswordReset } from "@/actions/auth";
+import { signIn, requestPasswordReset } from "@/actions/auth";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SignInPage() {
@@ -48,6 +49,13 @@ export default function SignInPage() {
           lowerDesc.includes("invalid")
         ) {
           setError("This confirmation link has expired or has already been used. Please request a new confirmation email.");
+        } else if (
+          lowerCode === "pkce_verifier_missing" ||
+          lowerCode.includes("verifier") ||
+          lowerDesc.includes("verifier") ||
+          lowerDesc.includes("pkce")
+        ) {
+          setInfoMessage("Email confirmed! If you opened the verification link on a different browser or device, please sign in with your email and password.");
         } else if (lowerCode === "user_resolution_failed") {
           setError("Unable to setup your user account. Please contact support or try signing in again.");
         } else if (lowerCode === "auth_callback_failed") {
@@ -72,44 +80,91 @@ export default function SignInPage() {
     setError("");
     setInfoMessage("");
 
-    if (!email.trim() || !password.trim() || (isSignUp && !name.trim())) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+    const trimmedName = name.trim();
+
+    if (!trimmedEmail || !trimmedPassword || (isSignUp && !trimmedName)) {
       setError("Please fill in all required fields.");
       return;
     }
 
     if (isSignUp) {
-      const isGmail = /^[a-zA-Z0-9._%+-]+@(gmail\.com|googlemail\.com)$/i.test(email.trim());
+      const isGmail = /^[a-zA-Z0-9._%+-]+@(gmail\.com|googlemail\.com)$/i.test(trimmedEmail);
       if (!isGmail) {
         setError("Registration requires a valid Gmail address (@gmail.com or @googlemail.com).");
         return;
       }
-      if (password.length < 8) {
+      if (trimmedPassword.length < 8) {
         setError("Password must be at least 8 characters long.");
         return;
       }
+
+      setLoading(true);
+
+      try {
+        const supabase = createBrowserClient();
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password: trimmedPassword,
+          options: {
+            data: { name: trimmedName },
+            emailRedirectTo: `${origin}/auth/callback`,
+          },
+        });
+
+        if (signUpError) {
+          setError(signUpError.message);
+          setLoading(false);
+          return;
+        }
+
+        // Supabase returns empty identities array when email is already registered and email confirmation is on
+        if (data.user?.identities && data.user.identities.length === 0) {
+          setError("Email is already registered");
+          setLoading(false);
+          return;
+        }
+
+        if (!data.session) {
+          setInfoMessage("Account created. Please check your email and verify your account before signing in.");
+          setLoading(false);
+          setIsSignUp(false);
+          return;
+        }
+
+        // Auto-confirmed in dev environment: synchronize session and app user
+        const formData = new FormData();
+        formData.append("email", trimmedEmail);
+        formData.append("password", trimmedPassword);
+        const signInResult = await signIn(formData);
+        if (signInResult?.error) {
+          setError(signInResult.error);
+          setLoading(false);
+        } else {
+          router.refresh();
+          router.push("/workspaces");
+        }
+      } catch (err) {
+        console.error("[SignIn] Error during registration:", err);
+        setError("An error occurred during registration. Please try again.");
+        setLoading(false);
+      }
+      return;
     }
 
     setLoading(true);
 
     const formData = new FormData();
-    formData.append("email", email.trim());
-    formData.append("password", password.trim());
-    if (isSignUp) {
-      formData.append("name", name.trim());
-    }
+    formData.append("email", trimmedEmail);
+    formData.append("password", trimmedPassword);
 
-    const result = isSignUp ? await signUp(formData) : await signIn(formData);
+    const result = await signIn(formData);
 
     if (result?.error) {
       setError(result.error);
       setLoading(false);
-    } else if (result?.requiresVerification) {
-      setInfoMessage(
-        result.message ||
-          "Account created. Please check your email and verify your account before signing in."
-      );
-      setLoading(false);
-      setIsSignUp(false);
     } else {
       router.refresh();
       router.push("/workspaces");
