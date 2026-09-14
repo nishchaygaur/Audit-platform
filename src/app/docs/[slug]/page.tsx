@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getDocItem, getAdjacentDocs, getDocsCategories, DOCS_MANIFEST } from "@/lib/docs";
-import DocsSidebar from "@/components/docs/DocsSidebar";
+// import DocsSidebar from "@/components/docs/DocsSidebar";
 import DocsHeader from "@/components/docs/DocsHeader";
 import DocsTOC from "@/components/docs/DocsTOC";
 import DocsPagination from "@/components/docs/DocsPagination";
