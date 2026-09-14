@@ -49,7 +49,7 @@ export default async function DocPage({ params }: DocPageProps) {
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
       {/* Left Navigation Sidebar */}
-      <DocsSidebar categories={categories} />
+      {/* <DocsSidebar categories={categories} /> */}
 
       {/* Main Content + Right TOC */}
       <div className="flex flex-1 min-w-0 overflow-y-auto">
