@@ -14,7 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { getDocsCategories } from "@/lib/docs";
-import DocsSidebar from "@/components/docs/DocsSidebar";
+// import DocsSidebar from "@/components/docs/DocsSidebar";
 
 export const metadata = {
   title: "Documentation Portal | Audit Platform",
