@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getDocItem, getAdjacentDocs, getDocsCategories, DOCS_MANIFEST } from "@/lib/docs";
-// import DocsSidebar from "@/components/docs/DocsSidebar";
+import DocsSidebar from "@/components/docs/DocsSidebar";
 import DocsHeader from "@/components/docs/DocsHeader";
 import DocsTOC from "@/components/docs/DocsTOC";
 import DocsPagination from "@/components/docs/DocsPagination";
@@ -49,7 +49,7 @@ export default async function DocPage({ params }: DocPageProps) {
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
       {/* Left Navigation Sidebar */}
-      {/* <DocsSidebar categories={categories} /> */}
+       <DocsSidebar categories={categories} /> 
 
       {/* Main Content + Right TOC */}
       <div className="flex flex-1 min-w-0 overflow-y-auto">
