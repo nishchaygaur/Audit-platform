@@ -116,7 +116,7 @@ export default function DocsLandingPage() {
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
       {/* Documentation Navigation Sidebar */}
-      <DocsSidebar categories={categories} />
+      {/* <DocsSidebar categories={categories} /> */}
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 overflow-y-auto px-4 py-8 sm:px-8 lg:px-12">
