@@ -23,6 +23,7 @@ import {
   Check,
   Clock,
   Loader2,
+  BookOpen,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
@@ -361,6 +362,16 @@ export default function Header() {
                   )}
 
                   <Link
+                    href="/docs"
+                    id="header-user-docs-link"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <BookOpen className="h-4 w-4 text-blue-600" />
+                    Documentation
+                  </Link>
+
+                  <Link
                     href="/settings"
                     onClick={() => setUserMenuOpen(false)}
                     className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100"
@@ -575,7 +586,16 @@ export default function Header() {
               </div>
             </div>
 
-            <div className="border-t border-slate-200 px-6 py-3 bg-slate-50 flex justify-end">
+            <div className="border-t border-slate-200 px-6 py-3 bg-slate-50 flex items-center justify-between">
+              <Link
+                href="/docs"
+                id="header-help-docs-link"
+                onClick={() => setHelpOpen(false)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition"
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Open Full Documentation (25 Chapters) →</span>
+              </Link>
               <button
                 type="button"
                 data-testid="close-help-modal-button"

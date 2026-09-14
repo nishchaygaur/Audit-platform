@@ -29,6 +29,7 @@ import {
   Plus,
   Shield,
   Check,
+  BookOpen,
   BookOpenCheck,
   LogOut,
   Sliders,
@@ -456,6 +457,28 @@ export default function Sidebar() {  const { user } = useAuth();
               <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-white" />
             </Link>
           )}
+
+          {/* Documentation */}
+          <Link
+            href="/docs"
+            id="sidebar-nav-documentation"
+            aria-current={isActive("/docs") ? "page" : undefined}
+            className={`group flex h-[34px] w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition ${
+              isActive("/docs")
+                ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400/30"
+                : "text-slate-300 hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            <BookOpen
+              className={`h-[16px] w-[16px] shrink-0 transition ${
+                isActive("/docs")
+                  ? "text-white"
+                  : "text-slate-400 group-hover:text-blue-300"
+              }`}
+              strokeWidth={1.9}
+            />
+            <span>Documentation</span>
+          </Link>
 
           {/* Settings */}
           <Link

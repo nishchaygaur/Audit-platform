@@ -37,7 +37,8 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     pathname === '/signin' ||
     pathname === '/reset-password' ||
-    pathname.startsWith('/auth/callback');
+    pathname.startsWith('/auth/callback') ||
+    pathname.startsWith('/docs');
 
   // Redirect unauthenticated or unverified users attempting to access protected routes
   if ((!user || !user.email_confirmed_at) && !isPublicRoute) {

@@ -4,7 +4,7 @@ test.describe("Phase 8, 9 & 26: Audit Plans & Audit Lifecycle", () => {
   test.beforeEach(async ({ page }) => {
     // Sign in as Alice Owner
     await page.goto("/signin");
-    await page.fill('input[placeholder="you@company.com"]', "alice.owner@example.com");
+    await page.fill('input[type="email"]', "alice.owner@example.com");
     await page.fill('input[placeholder="Enter your password"]', "Password123!");
     await page.click('button[type="submit"]:has-text("Sign In")');
 
