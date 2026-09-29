@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getDocsCategories } from "@/lib/docs";
 import DocsSidebar from "@/components/docs/DocsSidebar";
+import DocsLayoutWrapper from "@/components/docs/DocsLayoutWrapper";
 
 export const metadata = {
   title: "Documentation Portal | Audit Platform",
@@ -114,12 +115,13 @@ export default function DocsLandingPage() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
-      {/* Documentation Navigation Sidebar */}
-       <DocsSidebar categories={categories} />
+    <DocsLayoutWrapper>
+      <div className="flex min-h-screen bg-[#f8fafc]">
+        {/* Documentation Navigation Sidebar */}
+        <DocsSidebar categories={categories} />
 
-      {/* Main Content Area */}
-      <div className="flex-1 min-w-0 overflow-y-auto px-4 py-8 sm:px-8 lg:px-12">
+        {/* Main Content Area */}
+        <div className="flex-1 min-w-0 overflow-y-auto px-4 py-8 sm:px-8 lg:px-12">
         <div className="mx-auto max-w-5xl space-y-12">
           {/* HERO BANNER */}
           <div className="relative overflow-hidden rounded-3xl border border-blue-900/40 bg-gradient-to-br from-[#041a3d] via-[#092b5e] to-[#031530] p-8 sm:p-12 text-white shadow-xl">
@@ -362,7 +364,8 @@ export default function DocsLandingPage() {
             </p>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </DocsLayoutWrapper>
   );
 }

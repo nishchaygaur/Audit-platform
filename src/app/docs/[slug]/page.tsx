@@ -6,6 +6,7 @@ import DocsHeader from "@/components/docs/DocsHeader";
 import DocsTOC from "@/components/docs/DocsTOC";
 import DocsPagination from "@/components/docs/DocsPagination";
 import MarkdownViewer from "@/components/docs/MarkdownViewer";
+import DocsLayoutWrapper from "@/components/docs/DocsLayoutWrapper";
 
 interface DocPageProps {
   params: Promise<{
@@ -47,36 +48,38 @@ export default async function DocPage({ params }: DocPageProps) {
   const categories = getDocsCategories();
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
-      {/* Left Navigation Sidebar */}
-       <DocsSidebar categories={categories} /> 
+    <DocsLayoutWrapper>
+      <div className="flex min-h-screen bg-[#f8fafc]">
+        {/* Left Navigation Sidebar */}
+        <DocsSidebar categories={categories} />
 
-      {/* Main Content + Right TOC */}
-      <div className="flex flex-1 min-w-0 overflow-y-auto">
-        {/* Document Reading Column */}
-        <main className="flex-1 min-w-0 px-4 py-8 sm:px-8 md:px-12 max-w-4xl mx-auto">
-          {/* Document Header */}
-          <DocsHeader meta={doc} />
+        {/* Main Content + Right TOC */}
+        <div className="flex flex-1 min-w-0 overflow-y-auto">
+          {/* Document Reading Column */}
+          <main className="flex-1 min-w-0 px-4 py-8 sm:px-8 md:px-12 max-w-4xl mx-auto">
+            {/* Document Header */}
+            <DocsHeader meta={doc} />
 
-          {/* Markdown Content */}
-          <div className="min-w-0">
-            <MarkdownViewer content={doc.content} />
-          </div>
+            {/* Markdown Content */}
+            <div className="min-w-0">
+              <MarkdownViewer content={doc.content} />
+            </div>
 
-          {/* Previous / Next Pagination */}
-          <DocsPagination prev={prev} next={next} />
+            {/* Previous / Next Pagination */}
+            <DocsPagination prev={prev} next={next} />
 
-          {/* Document Footer */}
-          <div className="mt-12 border-t border-slate-200 pt-6 text-center text-xs text-slate-400 pb-12">
-            <p>
-              Audit Platform Documentation • {doc.filename} • Grounded in application implementation.
-            </p>
-          </div>
-        </main>
+            {/* Document Footer */}
+            <div className="mt-12 border-t border-slate-200 pt-6 text-center text-xs text-slate-400 pb-12">
+              <p>
+                Audit Platform Documentation • {doc.filename} • Grounded in application implementation.
+              </p>
+            </div>
+          </main>
 
-        {/* Right Sticky Table of Contents */}
-        <DocsTOC headings={doc.headings} />
+          {/* Right Sticky Table of Contents */}
+          <DocsTOC headings={doc.headings} />
+        </div>
       </div>
-    </div>
+    </DocsLayoutWrapper>
   );
 }
