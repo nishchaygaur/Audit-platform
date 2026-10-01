@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   X,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import {
@@ -77,6 +78,14 @@ export default function FrameworksPage() {
 
   const [showControlModal, setShowControlModal] =
     useState(false);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [controlSubmitting, setControlSubmitting] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
+
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [includeBaselineControls, setIncludeBaselineControls] = useState<boolean>(true);
@@ -181,20 +190,24 @@ export default function FrameworksPage() {
 
   async function toggleFrameworkStatus(id: string) {
     const fw = frameworks.find((f) => f.id === id);
-    if (!fw) return;
+    if (!fw || !currentWorkspace?.id) return;
     const nextStatus: FrameworkStatus =
       fw.status === "Active" ? "Available" : "Active";
 
-    const res = await updateFramework(currentWorkspace.id, id, {
-      status: nextStatus,
-    });
-    if (!res.success) {
-      alert(res.error || "Failed to update framework status");
-      return;
+    setActionLoadingId(id);
+    try {
+      const res = await updateFramework(currentWorkspace.id, id, {
+        status: nextStatus,
+      });
+      if (!res.success) {
+        alert(res.error || "Failed to update framework status");
+        return;
+      }
+      await loadData();
+    } finally {
+      setActionLoadingId(null);
+      setMenuFramework(null);
     }
-
-    await loadData();
-    setMenuFramework(null);
   }
 
   async function deleteFramework(id: string) {
@@ -202,7 +215,7 @@ export default function FrameworksPage() {
       (item) => item.id === id
     );
 
-    if (!framework) return;
+    if (!framework || !currentWorkspace?.id) return;
 
     const confirmed = window.confirm(
       `Delete ${framework.name}?`
@@ -210,97 +223,134 @@ export default function FrameworksPage() {
 
     if (!confirmed) return;
 
-    const res = await deleteFrameworkAction(currentWorkspace.id, id);
-    if (!res.success) {
-      alert(res.error || "Cannot delete framework");
-      return;
-    }
+    setActionLoadingId(id);
+    try {
+      const res = await deleteFrameworkAction(currentWorkspace.id, id);
+      if (!res.success) {
+        alert(res.error || "Cannot delete framework");
+        return;
+      }
 
-    await loadData();
-    setMenuFramework(null);
-
-    if (selectedFramework?.id === id) {
-      setSelectedFramework(null);
+      await loadData();
+      if (selectedFramework?.id === id) {
+        setSelectedFramework(null);
+      }
+    } finally {
+      setActionLoadingId(null);
+      setMenuFramework(null);
     }
   }
 
   async function addFramework() {
+    setFormError(null);
+
+    if (!currentWorkspace?.id) {
+      setFormError("No active workspace found. Please select a workspace from the sidebar or reload the page.");
+      return;
+    }
+
     if (
       !newFramework.name.trim() ||
       !newFramework.shortName.trim() ||
       !newFramework.version.trim()
     ) {
+      setFormError("Please select a standard framework preset from the dropdown or fill in Framework Name, Short Name, and Version.");
       return;
     }
 
-    const res = await createFramework(currentWorkspace.id, {
-      name: newFramework.name.trim(),
-      shortName: newFramework.shortName.trim(),
-      version: newFramework.version.trim(),
-      category: newFramework.category,
-      description:
-        newFramework.description.trim() ||
-        "Custom compliance framework added to the workspace.",
-      status: "Available",
-      initialControls:
-        includeBaselineControls && selectedPreset ? selectedPreset.controls : undefined,
-    });
+    setSubmitting(true);
+    try {
+      const res = await createFramework(currentWorkspace.id, {
+        name: newFramework.name.trim(),
+        shortName: newFramework.shortName.trim(),
+        version: newFramework.version.trim(),
+        category: newFramework.category,
+        description:
+          newFramework.description.trim() ||
+          "Custom compliance framework added to the workspace.",
+        status: "Available",
+        initialControls:
+          includeBaselineControls && selectedPreset ? selectedPreset.controls : undefined,
+      });
 
-    if (!res.success) {
-      alert(res.error || "Failed to create framework");
-      return;
+      if (!res.success) {
+        setFormError(res.error || "Failed to create framework");
+        return;
+      }
+
+      await loadData();
+      setNewFramework({
+        name: "",
+        shortName: "",
+        version: "",
+        category: "Cybersecurity",
+        description: "",
+      });
+
+      setSelectedPresetId("");
+      setShowAddModal(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create framework";
+      setFormError(msg);
+    } finally {
+      setSubmitting(false);
     }
-
-    await loadData();
-    setNewFramework({
-      name: "",
-      shortName: "",
-      version: "",
-      category: "Cybersecurity",
-      description: "",
-    });
-
-    setSelectedPresetId("");
-    setShowAddModal(false);
   }
 
   async function addControl() {
+    setControlError(null);
+
+    if (!selectedFramework) return;
+
+    if (!currentWorkspace?.id) {
+      setControlError("No active workspace selected.");
+      return;
+    }
+
     if (
-      !selectedFramework ||
       !newControl.id.trim() ||
       !newControl.title.trim()
     ) {
+      setControlError("Control ID and Control Name are required.");
       return;
     }
 
-    const res = await createControl(currentWorkspace.id, {
-      id: newControl.id.trim(),
-      frameworkId: selectedFramework.id,
-      frameworkName: selectedFramework.name,
-      frameworkShort: selectedFramework.shortName,
-      title: newControl.title.trim(),
-      domain: newControl.domain.trim() || "General Controls",
-      description:
-        newControl.description.trim() ||
-        "Control requirement added to the framework library.",
-      status: "Unmapped",
-    });
+    setControlSubmitting(true);
+    try {
+      const res = await createControl(currentWorkspace.id, {
+        id: newControl.id.trim(),
+        frameworkId: selectedFramework.id,
+        frameworkName: selectedFramework.name,
+        frameworkShort: selectedFramework.shortName,
+        title: newControl.title.trim(),
+        domain: newControl.domain.trim() || "General Controls",
+        description:
+          newControl.description.trim() ||
+          "Control requirement added to the framework library.",
+        status: "Unmapped",
+      });
 
-    if (!res.success) {
-      alert(res.error || "Failed to add control");
-      return;
+      if (!res.success) {
+        setControlError(res.error || "Failed to add control");
+        return;
+      }
+
+      await loadData();
+
+      setNewControl({
+        id: "",
+        title: "",
+        domain: "",
+        description: "",
+      });
+
+      setShowControlModal(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to add control";
+      setControlError(msg);
+    } finally {
+      setControlSubmitting(false);
     }
-
-    await loadData();
-
-    setNewControl({
-      id: "",
-      title: "",
-      domain: "",
-      description: "",
-    });
-
-    setShowControlModal(false);
   }
 
   return (
@@ -333,8 +383,11 @@ export default function FrameworksPage() {
 
             <button
               type="button"
-              onClick={() => setShowAddModal(true)}
-              className="flex h-9 items-center gap-2 rounded-md bg-blue-600 px-4 text-[12px] font-medium text-white hover:bg-blue-700"
+              onClick={() => {
+                setFormError(null);
+                setShowAddModal(true);
+              }}
+              className="flex h-9 items-center gap-2 rounded-md bg-blue-600 px-4 text-[12px] font-medium text-white hover:bg-blue-700 shadow-xs transition-colors"
             >
               <Plus className="h-4 w-4" />
               Add Framework
@@ -384,6 +437,7 @@ export default function FrameworksPage() {
               }
               label="Total Frameworks"
               value={String(totalFrameworks)}
+              loading={loading}
             />
 
             <SummaryCard
@@ -393,6 +447,7 @@ export default function FrameworksPage() {
               label="Active"
               value={String(activeFrameworks)}
               valueClass="text-emerald-600"
+              loading={loading}
             />
 
             <SummaryCard
@@ -402,6 +457,7 @@ export default function FrameworksPage() {
               label="Mapped Controls"
               value={String(mappedControls)}
               valueClass="text-blue-600"
+              loading={loading}
             />
 
             <SummaryCard
@@ -411,6 +467,7 @@ export default function FrameworksPage() {
               label="Control Libraries"
               value={String(controlLibraries)}
               valueClass="text-violet-600"
+              loading={loading}
             />
 
           </div>
@@ -487,7 +544,19 @@ export default function FrameworksPage() {
 
             {/* FRAMEWORK LIST */}
 
-            {filteredFrameworks.length > 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                </div>
+                <p className="mt-3 text-[13px] font-semibold text-slate-800">
+                  Loading compliance frameworks...
+                </p>
+                <p className="mt-1 max-w-sm text-[11px] text-slate-400">
+                  Retrieving control catalogs, mapped frameworks, and audit stats for {currentWorkspace?.name || "workspace"}
+                </p>
+              </div>
+            ) : filteredFrameworks.length > 0 ? (
               <div className="divide-y divide-slate-100">
 
                 {filteredFrameworks.map(
@@ -498,6 +567,7 @@ export default function FrameworksPage() {
                       menuOpen={
                         menuFramework === framework.id
                       }
+                      actionLoading={actionLoadingId === framework.id}
                       onMenu={() =>
                         setMenuFramework(
                           menuFramework === framework.id
@@ -761,9 +831,16 @@ export default function FrameworksPage() {
 
                 </table>
 
-                {(controlsByFramework[
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    <p className="mt-2 text-[11px] font-medium text-slate-600">
+                      Loading control catalog...
+                    </p>
+                  </div>
+                ) : (controlsByFramework[
                   selectedFramework.id
-                ] ?? []).length === 0 && (
+                ] ?? []).length === 0 ? (
                   <div className="px-5 py-12 text-center">
 
                     <FileText className="mx-auto h-7 w-7 text-slate-300" />
@@ -777,7 +854,7 @@ export default function FrameworksPage() {
                     </p>
 
                   </div>
-                )}
+                ) : null}
 
               </div>
 
@@ -794,23 +871,60 @@ export default function FrameworksPage() {
 
       {showAddModal && (
         <ModalOverlay
-          onClose={() => setShowAddModal(false)}
+          onClose={() => {
+            if (!submitting) {
+              setShowAddModal(false);
+              setFormError(null);
+            }
+          }}
         >
 
-          <div className="w-full max-w-[560px] rounded-xl bg-white shadow-2xl">
+          <div className="w-full max-w-[560px] rounded-xl bg-white shadow-2xl overflow-hidden">
 
             <ModalHeader
               title="Add Framework"
-              subtitle="Create a framework entry for this workspace."
-              onClose={() => setShowAddModal(false)}
+              subtitle="Create or import a compliance framework into this workspace."
+              disabled={submitting}
+              onClose={() => {
+                if (!submitting) {
+                  setShowAddModal(false);
+                  setFormError(null);
+                }
+              }}
             />
 
-            <div className="space-y-4 px-6 py-5">
+            <div className="space-y-4 px-6 py-5 max-h-[75vh] overflow-y-auto">
+
+              {formError && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-[11px] text-red-700">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-red-900">Cannot create framework</p>
+                    <p className="mt-0.5 text-red-700 leading-relaxed">{formError}</p>
+                  </div>
+                </div>
+              )}
+
+              {submitting && (
+                <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/80 p-3.5 text-[11px] text-blue-900 shadow-xs">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-600" />
+                  <div>
+                    <p className="font-semibold text-blue-950">Provisioning Framework...</p>
+                    <p className="text-[10px] text-blue-700 mt-0.5">
+                      {includeBaselineControls && selectedPreset
+                        ? `Registering ${newFramework.name || selectedPreset.name} and importing ${selectedPreset.controls.length} curated baseline controls...`
+                        : "Writing framework records into workspace database..."}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <FormField label="Select Framework Preset / Standard Template">
                 <select
+                  disabled={submitting}
                   value={selectedPresetId}
                   onChange={(e) => {
+                    setFormError(null);
                     const presetId = e.target.value;
                     setSelectedPresetId(presetId);
                     if (presetId === "custom" || !presetId) {
@@ -834,7 +948,7 @@ export default function FrameworksPage() {
                       }
                     }
                   }}
-                  className={`${inputClass} font-medium text-slate-800 bg-slate-50 border-slate-300 focus:bg-white`}
+                  className={`${inputClass} font-medium text-slate-800 bg-slate-50 border-slate-300 focus:bg-white disabled:opacity-60`}
                 >
                   <option value="">-- Choose from Pre-configured Standards Catalog --</option>
                   <option value="custom">⚙️ Custom / Blank Framework (Manual Entry)</option>
@@ -886,6 +1000,7 @@ export default function FrameworksPage() {
                   <label className="mt-2.5 flex cursor-pointer items-center gap-2 border-t border-blue-100/80 pt-2">
                     <input
                       type="checkbox"
+                      disabled={submitting}
                       checked={includeBaselineControls}
                       onChange={(e) => setIncludeBaselineControls(e.target.checked)}
                       className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -901,30 +1016,34 @@ export default function FrameworksPage() {
 
                 <FormField label="Framework Name">
                   <input
+                    disabled={submitting}
                     value={newFramework.name}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setFormError(null);
                       setNewFramework({
                         ...newFramework,
                         name: event.target.value,
-                      })
-                    }
+                      });
+                    }}
                     placeholder="e.g. ISO/IEC 27001:2022"
-                    className={inputClass}
+                    className={`${inputClass} disabled:opacity-60`}
                   />
                 </FormField>
 
                 <FormField label="Short Name">
                   <input
+                    disabled={submitting}
                     value={newFramework.shortName}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setFormError(null);
                       setNewFramework({
                         ...newFramework,
                         shortName:
                           event.target.value,
-                      })
-                    }
+                      });
+                    }}
                     placeholder="e.g. ISO 27001"
-                    className={inputClass}
+                    className={`${inputClass} disabled:opacity-60`}
                   />
                 </FormField>
 
@@ -934,21 +1053,24 @@ export default function FrameworksPage() {
 
                 <FormField label="Version">
                   <input
+                    disabled={submitting}
                     value={newFramework.version}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setFormError(null);
                       setNewFramework({
                         ...newFramework,
                         version:
                           event.target.value,
-                      })
-                    }
+                      });
+                    }}
                     placeholder="e.g. 2022"
-                    className={inputClass}
+                    className={`${inputClass} disabled:opacity-60`}
                   />
                 </FormField>
 
                 <FormField label="Category">
                   <select
+                    disabled={submitting}
                     value={newFramework.category}
                     onChange={(event) =>
                       setNewFramework({
@@ -957,7 +1079,7 @@ export default function FrameworksPage() {
                           event.target.value,
                       })
                     }
-                    className={inputClass}
+                    className={`${inputClass} disabled:opacity-60`}
                   >
                     <option>
                       Information Security
@@ -982,6 +1104,7 @@ export default function FrameworksPage() {
 
               <FormField label="Description">
                 <textarea
+                  disabled={submitting}
                   value={newFramework.description}
                   onChange={(event) =>
                     setNewFramework({
@@ -992,18 +1115,28 @@ export default function FrameworksPage() {
                   }
                   rows={4}
                   placeholder="Describe the framework..."
-                  className={`${inputClass} resize-none py-2`}
+                  className={`${inputClass} resize-none py-2 disabled:opacity-60`}
                 />
               </FormField>
 
             </div>
 
             <ModalFooter
-              onCancel={() =>
-                setShowAddModal(false)
-              }
+              onCancel={() => {
+                if (!submitting) {
+                  setShowAddModal(false);
+                  setFormError(null);
+                }
+              }}
               onConfirm={addFramework}
               confirmLabel="Add Framework"
+              loading={submitting}
+              loadingLabel={
+                includeBaselineControls && selectedPreset
+                  ? `Importing ${selectedPreset.shortName} & Controls...`
+                  : "Creating Framework..."
+              }
+              disabled={submitting}
             />
 
           </div>
@@ -1018,51 +1151,72 @@ export default function FrameworksPage() {
       {showControlModal &&
         selectedFramework && (
           <ModalOverlay
-            onClose={() =>
-              setShowControlModal(false)
-            }
+            onClose={() => {
+              if (!controlSubmitting) {
+                setShowControlModal(false);
+                setControlError(null);
+              }
+            }}
           >
 
-            <div className="w-full max-w-[520px] rounded-xl bg-white shadow-2xl">
+            <div className="w-full max-w-[520px] rounded-xl bg-white shadow-2xl overflow-hidden">
 
               <ModalHeader
                 title="Add Control"
-                subtitle={`Add a control to ${selectedFramework.shortName}.`}
-                onClose={() =>
-                  setShowControlModal(false)
-                }
+                subtitle={`Add a control requirement to ${selectedFramework.shortName}.`}
+                disabled={controlSubmitting}
+                onClose={() => {
+                  if (!controlSubmitting) {
+                    setShowControlModal(false);
+                    setControlError(null);
+                  }
+                }}
               />
 
-              <div className="space-y-4 px-6 py-5">
+              <div className="space-y-4 px-6 py-5 max-h-[75vh] overflow-y-auto">
+
+                {controlError && (
+                  <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-[11px] text-red-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-red-900">Cannot create control</p>
+                      <p className="mt-0.5 text-red-700 leading-relaxed">{controlError}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
 
                   <FormField label="Control ID">
                     <input
+                      disabled={controlSubmitting}
                       value={newControl.id}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setControlError(null);
                         setNewControl({
                           ...newControl,
                           id: event.target.value,
-                        })
-                      }
+                        });
+                      }}
                       placeholder="e.g. A.5.3"
-                      className={inputClass}
+                      className={`${inputClass} disabled:opacity-60`}
                     />
                   </FormField>
 
                   <FormField label="Domain">
                     <input
+                      disabled={controlSubmitting}
                       value={newControl.domain}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setControlError(null);
                         setNewControl({
                           ...newControl,
                           domain:
                             event.target.value,
-                        })
-                      }
+                        });
+                      }}
                       placeholder="e.g. Access Control"
-                      className={inputClass}
+                      className={`${inputClass} disabled:opacity-60`}
                     />
                   </FormField>
 
@@ -1070,43 +1224,53 @@ export default function FrameworksPage() {
 
                 <FormField label="Control Name">
                   <input
+                    disabled={controlSubmitting}
                     value={newControl.title}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setControlError(null);
                       setNewControl({
                         ...newControl,
                         title:
                           event.target.value,
-                      })
-                    }
+                      });
+                    }}
                     placeholder="Enter control name"
-                    className={inputClass}
+                    className={`${inputClass} disabled:opacity-60`}
                   />
                 </FormField>
 
                 <FormField label="Description">
                   <textarea
+                    disabled={controlSubmitting}
                     value={newControl.description}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setControlError(null);
                       setNewControl({
                         ...newControl,
                         description:
                           event.target.value,
-                      })
-                    }
+                      });
+                    }}
                     rows={4}
                     placeholder="Describe the control requirement..."
-                    className={`${inputClass} resize-none py-2`}
+                    className={`${inputClass} resize-none py-2 disabled:opacity-60`}
                   />
                 </FormField>
 
               </div>
 
               <ModalFooter
-                onCancel={() =>
-                  setShowControlModal(false)
-                }
+                onCancel={() => {
+                  if (!controlSubmitting) {
+                    setShowControlModal(false);
+                    setControlError(null);
+                  }
+                }}
                 onConfirm={addControl}
                 confirmLabel="Add Control"
+                loading={controlSubmitting}
+                loadingLabel="Adding Control..."
+                disabled={controlSubmitting}
               />
 
             </div>
@@ -1125,6 +1289,7 @@ export default function FrameworksPage() {
 function FrameworkRow({
   framework,
   menuOpen,
+  actionLoading = false,
   onMenu,
   onView,
   onToggle,
@@ -1132,6 +1297,7 @@ function FrameworkRow({
 }: {
   framework: Framework;
   menuOpen: boolean;
+  actionLoading?: boolean;
   onMenu: () => void;
   onView: () => void;
   onToggle: () => void;
@@ -1261,66 +1427,71 @@ function FrameworkRow({
         </div>
 
         <div className="relative ml-auto flex shrink-0 items-center gap-2">
+          {actionLoading ? (
+            <div className="flex h-8 items-center gap-1.5 rounded-md bg-blue-50 px-3 text-[11px] font-medium text-blue-600">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Saving...</span>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onMenu}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-blue-600"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
 
-          <button
-            type="button"
-            onClick={onMenu}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-blue-600"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+              {menuOpen && (
+                <div className="absolute right-[92px] top-9 z-30 w-[155px] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl">
+                  <button
+                    type="button"
+                    onClick={onView}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
+                  >
+                    <BookOpenCheck className="h-3.5 w-3.5" />
+                    View Library
+                  </button>
 
-          {menuOpen && (
-            <div className="absolute right-[92px] top-9 z-30 w-[155px] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl">
+                  <button
+                    type="button"
+                    onClick={onToggle}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
+                  >
+                    {active ? (
+                      <>
+                        <X className="h-3.5 w-3.5" />
+                        Deactivate
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Activate
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-red-600 hover:bg-red-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              )}
 
               <button
                 type="button"
                 onClick={onView}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
+                className="flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
               >
-                <BookOpenCheck className="h-3.5 w-3.5" />
-                View Library
+                View
+                <ChevronRight className="h-3.5 w-3.5" />
               </button>
-
-              <button
-                type="button"
-                onClick={onToggle}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
-              >
-                {active ? (
-                  <>
-                    <X className="h-3.5 w-3.5" />
-                    Deactivate
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-3.5 w-3.5" />
-                    Activate
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={onDelete}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-red-600 hover:bg-red-50"
-              >
-                <X className="h-3.5 w-3.5" />
-                Delete
-              </button>
-
-            </div>
+            </>
           )}
-
-          <button
-            type="button"
-            onClick={onView}
-            className="flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-          >
-            View
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-
         </div>
 
       </div>
@@ -1338,11 +1509,13 @@ function SummaryCard({
   label,
   value,
   valueClass = "text-slate-900",
+  loading = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   valueClass?: string;
+  loading?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
@@ -1351,11 +1524,15 @@ function SummaryCard({
         {icon}
       </div>
 
-      <p
-        className={`text-[20px] font-semibold ${valueClass}`}
-      >
-        {value}
-      </p>
+      {loading ? (
+        <div className="h-6 w-14 animate-pulse rounded bg-slate-200 my-0.5" />
+      ) : (
+        <p
+          className={`text-[20px] font-semibold ${valueClass}`}
+        >
+          {value}
+        </p>
+      )}
 
       <p className="mt-1 text-[10px] text-slate-400">
         {label}
@@ -1444,10 +1621,12 @@ function ModalHeader({
   title,
   subtitle,
   onClose,
+  disabled = false,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
@@ -1464,8 +1643,9 @@ function ModalHeader({
 
       <button
         type="button"
+        disabled={disabled}
         onClick={onClose}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <X className="h-4 w-4" />
       </button>
@@ -1478,28 +1658,37 @@ function ModalFooter({
   onCancel,
   onConfirm,
   confirmLabel,
+  loading = false,
+  loadingLabel,
+  disabled = false,
 }: {
   onCancel: () => void;
   onConfirm: () => void;
   confirmLabel: string;
+  loading?: boolean;
+  loadingLabel?: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex justifynd gap-2 border-t border-slate-100 px-6 py-4">
+    <div className="flex justify-end items-center gap-2 border-t border-slate-100 px-6 py-4 bg-slate-50/50">
 
       <button
         type="button"
+        disabled={loading || disabled}
         onClick={onCancel}
-        className="h-9 rounded-md border border-slate-200 px-4 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+        className="h-9 rounded-md border border-slate-200 bg-white px-4 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
         Cancel
       </button>
 
       <button
         type="button"
+        disabled={loading || disabled}
         onClick={onConfirm}
-        className="h-9 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white hover:bg-blue-700"
+        className="inline-flex items-center justify-center gap-2 h-9 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-xs min-w-[110px]"
       >
-        {confirmLabel}
+        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <span>{loading ? (loadingLabel || "Saving...") : confirmLabel}</span>
       </button>
 
     </div>

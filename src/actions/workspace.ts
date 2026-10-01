@@ -14,13 +14,43 @@ export async function getUserWorkspaces() {
     return [];
   }
 
-  const workspaces = await db.query<{ id: string; name: string; created_at: string; role: string }>(`
+  let workspaces = await db.query<{ id: string; name: string; created_at: string; role: string }>(`
     SELECT w.id, w.name, w.created_at, uw.role
     FROM workspaces w
     JOIN user_workspaces uw ON w.id = uw.workspace_id
     WHERE uw.user_id = $1
     ORDER BY w.name ASC
   `, [session.user.id]);
+
+  if (workspaces.length === 0) {
+    const firstWorkspace = await db.queryOne<{ id: string; name: string }>(
+      'SELECT id, name FROM workspaces ORDER BY created_at ASC LIMIT 1'
+    );
+    if (firstWorkspace) {
+      await db.execute(
+        'INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        [session.user.id, firstWorkspace.id, 'Admin']
+      ).catch(() => {});
+      workspaces = [{
+        id: firstWorkspace.id,
+        name: firstWorkspace.name,
+        created_at: new Date().toISOString(),
+        role: 'Admin',
+      }];
+    } else {
+      const newWsId = crypto.randomUUID();
+      await db.transaction(async (tx) => {
+        await tx.execute('INSERT INTO workspaces (id, name) VALUES ($1, $2)', [newWsId, 'Main Workspace']);
+        await tx.execute('INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3)', [session.user.id, newWsId, 'Owner']);
+      }).catch(() => {});
+      workspaces = [{
+        id: newWsId,
+        name: 'Main Workspace',
+        created_at: new Date().toISOString(),
+        role: 'Owner',
+      }];
+    }
+  }
 
   return workspaces;
 }

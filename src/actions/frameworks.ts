@@ -1,7 +1,7 @@
 "use server";
 
 import db from "@/lib/db";
-import { requirePermission } from "@/lib/server-rbac";
+import { requirePermission, requireAnyPermission } from "@/lib/server-rbac";
 import { logAuditEvent } from "./audit-trail";
 
 export type FrameworkStatus = "Active" | "Available";
@@ -125,7 +125,7 @@ export async function createFramework(workspaceId: string, input: CreateFramewor
   }
 
   try {
-    await requirePermission("workspace.manage", workspaceId);
+    await requireAnyPermission(["workspace.manage", "audits.create", "audits.update"], workspaceId);
 
     if (!input.name || !input.shortName) {
       return { success: false, error: "Framework name and short name are required" };
@@ -134,7 +134,7 @@ export async function createFramework(workspaceId: string, input: CreateFramewor
     const id = input.shortName.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + Date.now();
     const name = input.name.trim();
     const shortName = input.shortName.trim();
-    const description = input.description.trim() || "Custom compliance framework";
+    const description = input.description?.trim() || "Custom compliance framework";
     const category = input.category?.trim() || "Cybersecurity";
     const version = input.version?.trim() || "1.0";
     const status: FrameworkStatus = input.status || "Active";
@@ -216,7 +216,7 @@ export async function updateFramework(
   }
 
   try {
-    await requirePermission("workspace.manage", workspaceId);
+    await requireAnyPermission(["workspace.manage", "audits.update", "audits.create"], workspaceId);
 
     const existing = await db.queryOne<FrameworkRecord>(
       `SELECT * FROM frameworks WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL)`,
@@ -285,7 +285,7 @@ export async function deleteFramework(workspaceId: string, frameworkId: string) 
   }
 
   try {
-    await requirePermission("workspace.manage", workspaceId);
+    await requireAnyPermission(["workspace.manage", "audits.delete"], workspaceId);
 
     const existing = await db.queryOne<FrameworkRecord>(
       `SELECT * FROM frameworks WHERE id = $1 AND workspace_id = $2`,
@@ -375,7 +375,7 @@ export async function createControl(workspaceId: string, input: CreateControlInp
   }
 
   try {
-    await requirePermission("workspace.manage", workspaceId);
+    await requireAnyPermission(["workspace.manage", "audits.create", "audits.update"], workspaceId);
 
     if (!input.id || !input.title || !input.frameworkId) {
       return { success: false, error: "Control ID, title, and framework are required" };
@@ -446,7 +446,7 @@ export async function updateControl(
   }
 
   try {
-    await requirePermission("workspace.manage", workspaceId);
+    await requireAnyPermission(["workspace.manage", "audits.update", "audits.create"], workspaceId);
 
     const existing = await db.queryOne<{ id: string; title: string; mapped_frameworks: string }>(
       `SELECT * FROM controls WHERE id = $1`,
@@ -511,7 +511,7 @@ export async function deleteControl(workspaceId: string, controlId: string) {
   }
 
   try {
-    await requirePermission("workspace.manage", workspaceId);
+    await requireAnyPermission(["workspace.manage", "audits.delete"], workspaceId);
 
     await db.execute(`DELETE FROM controls WHERE id = $1`, [controlId]);
 
