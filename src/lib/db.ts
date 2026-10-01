@@ -1,4 +1,5 @@
 import { Pool, PoolClient, QueryResultRow } from 'pg';
+import { FRAMEWORK_PRESETS } from './framework-presets';
 
 // Lazy pool initialization to support serverless lifecycle and avoid module-eval crashes if DATABASE_URL is not yet bound
 let globalPool: Pool | null = null;
@@ -373,49 +374,35 @@ export const POSTGRES_SCHEMA_SQL = `
 
 async function seedBaselineData(pool: Pool): Promise<void> {
   try {
-    const fwCountRow = await pool.query<{ count: string | number }>('SELECT COUNT(*) as count FROM frameworks');
-    if (Number(fwCountRow.rows[0]?.count || 0) === 0) {
-      await pool.query(`
+    for (const fw of FRAMEWORK_PRESETS) {
+      await pool.query(
+        `
         INSERT INTO frameworks (id, name, short_name, description, category, version, status)
-        VALUES
-          ('iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Information security management system requirements and control framework.', 'Information Security', '2022', 'Active'),
-          ('nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Framework for managing and reducing cybersecurity risk across an organization.', 'Cybersecurity', '2.0', 'Active'),
-          ('nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Structured process for managing security and privacy risk throughout system lifecycles.', 'Risk Management', 'Rev. 5', 'Active'),
-          ('soc-2', 'SOC 2 Trust Services Criteria', 'SOC 2', 'Assurance standard covering security, availability, integrity, confidentiality and privacy.', 'Assurance', '2023', 'Active')
+        VALUES ($1, $2, $3, $4, $5, $6, 'Active')
         ON CONFLICT (id) DO NOTHING;
+        `,
+        [fw.id, fw.name, fw.shortName, fw.description, fw.category, fw.version]
+      );
 
-        INSERT INTO controls (id, framework_id, framework_name, framework_short, title, description, domain, status, mapped_frameworks)
-        VALUES
-          ('ISO-A.5.1', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Policies for information security', 'Information security policies and supporting topic-specific policies shall be defined, approved, published and reviewed.', 'Organizational Controls', 'Mapped', '["NIST CSF", "SOC 2"]'),
-          ('ISO-A.5.2', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Information security roles and responsibilities', 'Information security roles and responsibilities shall be defined and allocated according to organizational requirements.', 'Organizational Controls', 'Mapped', '["NIST CSF"]'),
-          ('ISO-A.5.7', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Threat intelligence', 'Information relating to information security threats shall be collected and analyzed to produce threat intelligence.', 'Organizational Controls', 'Mapped', '["NIST CSF"]'),
-          ('ISO-A.5.15', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Access control', 'Rules to control physical and logical access to information and other associated assets shall be established and documented.', 'Organizational Controls', 'Mapped', '["NIST CSF", "SOC 2"]'),
-          ('ISO-A.5.23', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Information security for use of cloud services', 'Processes for acquisition, use, management and exit from cloud services shall be established in accordance with information security requirements.', 'Organizational Controls', 'Mapped', '["SOC 2"]'),
-          ('ISO-A.6.1', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Screening', 'Background verification checks on all candidates to become personnel shall be carried out in accordance with relevant laws and regulations.', 'People Controls', 'Mapped', '["NIST CSF"]'),
-          ('ISO-A.6.3', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Information security awareness and training', 'Personnel of the organization and relevant contractors shall receive appropriate awareness training.', 'People Controls', 'Mapped', '["NIST CSF"]'),
-          ('ISO-A.7.4', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Physical security monitoring', 'Premises shall be continuously monitored for unauthorized physical access.', 'Physical Controls', 'Mapped', '["NIST CSF"]'),
-          ('ISO-A.8.2', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Privileged access rights', 'The allocation and use of privileged access rights shall be restricted and managed.', 'Technological Controls', 'Mapped', '["NIST CSF", "SOC 2"]'),
-          ('ISO-A.8.5', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Secure authentication', 'Secure authentication technologies and procedures shall be implemented based on information access restrictions and system access policy.', 'Technological Controls', 'Mapped', '["NIST CSF"]'),
-          ('ISO-A.8.9', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Configuration management', 'Configurations, including security configurations, of hardware, software, services and networks shall be established, documented, implemented, monitored and reviewed.', 'Technological Controls', 'Unmapped', '[]'),
-          ('ISO-A.8.15', 'iso-27001', 'ISO/IEC 27001:2022', 'ISO 27001', 'Logging', 'Logs that record activities, exceptions, faults and other relevant events shall be produced, stored, protected and analyzed.', 'Technological Controls', 'Mapped', '["NIST CSF"]'),
-          ('NIST-GV.OC-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Organizational context', 'The organizational mission, objectives, stakeholders, and legal requirements are understood and inform cybersecurity risk management.', 'Govern', 'Mapped', '["ISO 27001"]'),
-          ('NIST-GV.RM-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Risk management strategy', 'Cybersecurity risk management objectives and strategies are established and communicated across the enterprise.', 'Govern', 'Mapped', '["ISO 27001"]'),
-          ('NIST-ID.AM-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Asset inventory', 'Inventories of hardware, software, services, and external information systems are maintained.', 'Identify', 'Mapped', '["ISO 27001"]'),
-          ('NIST-ID.RA-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Vulnerability identification', 'Vulnerabilities in assets are identified, validated, and recorded.', 'Identify', 'Mapped', '["ISO 27001"]'),
-          ('NIST-PR.AA-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Identities and credentials', 'Identities and credentials for authorized users, services, and hardware are managed.', 'Protect', 'Mapped', '["ISO 27001"]'),
-          ('NIST-PR.DS-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Data protection at rest', 'Data at rest is protected according to the organization’s risk strategy.', 'Protect', 'Mapped', '["ISO 27001"]'),
-          ('NIST-DE.CM-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Continuous monitoring', 'Networks and operational environments are monitored to detect potential cybersecurity events.', 'Detect', 'Mapped', '["ISO 27001"]'),
-          ('NIST-RS.MA-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Incident management', 'Incident response plans are executed in response to declared cybersecurity incidents.', 'Respond', 'Mapped', '["ISO 27001"]'),
-          ('NIST-RC.RP-01', 'nist-csf', 'NIST Cybersecurity Framework 2.0', 'NIST CSF', 'Recovery plan execution', 'Recovery processes and procedures are executed and maintained to restore impaired systems and services.', 'Recover', 'Mapped', '["ISO 27001"]'),
-          ('RMF-1', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Prepare', 'Organizational and system-level activities prepare the entity to manage security and privacy risks using the RMF.', 'Prepare', 'Mapped', '["ISO 27001"]'),
-          ('RMF-2', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Categorize', 'Categorize the system and the information processed, stored, and transmitted based on an impact analysis.', 'Categorize', 'Mapped', '["ISO 27001"]'),
-          ('RMF-3', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Select', 'Select an initial set of baseline security and privacy controls for the system and tailor them as appropriate.', 'Select', 'Mapped', '["ISO 27001"]'),
-          ('RMF-4', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Implement', 'Implement the security and privacy controls and document how the controls are deployed within the system.', 'Implement', 'Unmapped', '[]'),
-          ('RMF-5', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Assess', 'Assess the controls to determine if they are implemented correctly, operating as intended, and producing desired outcomes.', 'Assess', 'Mapped', '["ISO 27001"]'),
-          ('RMF-6', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Authorize', 'Authorize system operation based on a determination of the risk to organizational operations and assets.', 'Authorize', 'Mapped', '["ISO 27001"]'),
-          ('RMF-7', 'nist-rmf', 'NIST Risk Management Framework', 'NIST RMF', 'Monitor', 'Continuously monitor control implementation and system security/privacy posture.', 'Monitor', 'Mapped', '["ISO 27001"]')
-        ON CONFLICT (id) DO NOTHING;
-      `);
+      for (const ctrl of fw.controls) {
+        await pool.query(
+          `
+          INSERT INTO controls (id, framework_id, framework_name, framework_short, title, description, domain, status, mapped_frameworks)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'Mapped', $8)
+          ON CONFLICT (id) DO NOTHING;
+          `,
+          [
+            ctrl.id,
+            fw.id,
+            fw.name,
+            fw.shortName,
+            ctrl.title,
+            ctrl.description,
+            ctrl.domain,
+            JSON.stringify(ctrl.mappedFrameworks || []),
+          ]
+        );
+      }
     }
   } catch (err) {
     console.error("Baseline seeding skipped or failed:", err);

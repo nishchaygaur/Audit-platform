@@ -42,6 +42,13 @@ export interface CreateFrameworkInput {
   category?: string;
   version?: string;
   status?: FrameworkStatus;
+  initialControls?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    domain?: string;
+    mappedFrameworks?: string[];
+  }>;
 }
 
 export interface CreateControlInput {
@@ -140,13 +147,40 @@ export async function createFramework(workspaceId: string, input: CreateFramewor
       [id, workspaceId, name, shortName, description, category, version, status]
     );
 
+    let insertedControlsCount = 0;
+    if (input.initialControls && input.initialControls.length > 0) {
+      for (const ctrl of input.initialControls) {
+        const controlId = `${id}-${ctrl.id}`;
+        await db.execute(
+          `
+          INSERT INTO controls (id, framework_id, framework_name, framework_short, title, description, domain, status, mapped_frameworks, workspace_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT (id) DO NOTHING
+          `,
+          [
+            controlId,
+            id,
+            name,
+            shortName,
+            ctrl.title,
+            ctrl.description || "",
+            ctrl.domain || "General",
+            "Mapped",
+            JSON.stringify(ctrl.mappedFrameworks || []),
+            workspaceId,
+          ]
+        );
+        insertedControlsCount++;
+      }
+    }
+
     await logAuditEvent({
       workspaceId,
       action: "CREATE",
       entityType: "Audit",
       entityId: id,
-      description: `Created framework "${name}" (${shortName})`,
-      details: { version, category, status },
+      description: `Created framework "${name}" (${shortName}) with ${insertedControlsCount} initial controls`,
+      details: { version, category, status, initialControlsCount: insertedControlsCount },
     });
 
     return {
@@ -160,8 +194,8 @@ export async function createFramework(workspaceId: string, input: CreateFramewor
         category,
         version,
         status,
-        controls_count: 0,
-        mapped_count: 0,
+        controls_count: insertedControlsCount,
+        mapped_count: insertedControlsCount,
         audits_count: 0,
         created_at: new Date().toISOString(),
       },

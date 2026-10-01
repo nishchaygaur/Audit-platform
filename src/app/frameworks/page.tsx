@@ -27,6 +27,7 @@ import {
   createControl,
 } from "@/actions/frameworks";
 import CrossMappingView from "@/components/frameworks/CrossMappingView";
+import { FRAMEWORK_PRESETS } from "@/lib/framework-presets";
 
 type FrameworkStatus = "Active" | "Available";
 
@@ -76,6 +77,13 @@ export default function FrameworksPage() {
 
   const [showControlModal, setShowControlModal] =
     useState(false);
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [includeBaselineControls, setIncludeBaselineControls] = useState<boolean>(true);
+
+  const selectedPreset = useMemo(() => {
+    return FRAMEWORK_PRESETS.find((p) => p.id === selectedPresetId);
+  }, [selectedPresetId]);
 
   const [newFramework, setNewFramework] = useState({
     name: "",
@@ -234,6 +242,8 @@ export default function FrameworksPage() {
         newFramework.description.trim() ||
         "Custom compliance framework added to the workspace.",
       status: "Available",
+      initialControls:
+        includeBaselineControls && selectedPreset ? selectedPreset.controls : undefined,
     });
 
     if (!res.success) {
@@ -250,6 +260,7 @@ export default function FrameworksPage() {
       description: "",
     });
 
+    setSelectedPresetId("");
     setShowAddModal(false);
   }
 
@@ -795,6 +806,96 @@ export default function FrameworksPage() {
             />
 
             <div className="space-y-4 px-6 py-5">
+
+              <FormField label="Select Framework Preset / Standard Template">
+                <select
+                  value={selectedPresetId}
+                  onChange={(e) => {
+                    const presetId = e.target.value;
+                    setSelectedPresetId(presetId);
+                    if (presetId === "custom" || !presetId) {
+                      setNewFramework({
+                        name: "",
+                        shortName: "",
+                        version: "1.0",
+                        category: "Cybersecurity",
+                        description: "",
+                      });
+                    } else {
+                      const preset = FRAMEWORK_PRESETS.find((p) => p.id === presetId);
+                      if (preset) {
+                        setNewFramework({
+                          name: preset.name,
+                          shortName: preset.shortName,
+                          version: preset.version,
+                          category: preset.category,
+                          description: preset.description,
+                        });
+                      }
+                    }
+                  }}
+                  className={`${inputClass} font-medium text-slate-800 bg-slate-50 border-slate-300 focus:bg-white`}
+                >
+                  <option value="">-- Choose from Pre-configured Standards Catalog --</option>
+                  <option value="custom">⚙️ Custom / Blank Framework (Manual Entry)</option>
+                  
+                  <optgroup label="Cybersecurity & Information Security">
+                    <option value="iso-27001">ISO/IEC 27001:2022 - Information Security Management</option>
+                    <option value="nist-csf">NIST Cybersecurity Framework 2.0 (CSF 2.0)</option>
+                    <option value="cis-v8">CIS Critical Security Controls v8 (CIS 18)</option>
+                    <option value="nist-800-53">NIST SP 800-53 Rev. 5 - Federal Security Controls</option>
+                    <option value="csa-ccm">CSA CCM v4 - Cloud Security Alliance Matrix</option>
+                  </optgroup>
+
+                  <optgroup label="Assurance & Financial Compliance">
+                    <option value="soc-2">AICPA SOC 2 Type II - Trust Services Criteria</option>
+                    <option value="pci-dss">PCI DSS v4.0 - Payment Card Industry Standard</option>
+                    <option value="soc-1">SOC 1 / SSAE 18 (ISAE 3402) - Financial Controls</option>
+                  </optgroup>
+
+                  <optgroup label="Privacy & Healthcare">
+                    <option value="hipaa">HIPAA Security & Privacy Rule (45 CFR Part 160/164)</option>
+                    <option value="gdpr">GDPR - General Data Protection Regulation (EU 2016/679)</option>
+                    <option value="iso-27701">ISO/IEC 27701:2019 - Privacy Information Management</option>
+                  </optgroup>
+
+                  <optgroup label="Risk Management & Government">
+                    <option value="nist-rmf">NIST Risk Management Framework (RMF Rev. 5)</option>
+                    <option value="fedramp">FedRAMP Moderate Baseline (Rev. 5 Tailored)</option>
+                    <option value="dora">DORA - Digital Operational Resilience Act (EU 2022/2554)</option>
+                  </optgroup>
+                </select>
+              </FormField>
+
+              {selectedPreset && (
+                <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50/80 to-indigo-50/50 p-3.5 text-[11px] text-blue-900 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        {selectedPreset.shortName}
+                      </span>
+                      <span className="font-semibold text-slate-800">{selectedPreset.name}</span>
+                    </div>
+                    <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-semibold text-blue-800">
+                      {selectedPreset.controls.length} Baseline Controls
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                    {selectedPreset.description}
+                  </p>
+                  <label className="mt-2.5 flex cursor-pointer items-center gap-2 border-t border-blue-100/80 pt-2">
+                    <input
+                      type="checkbox"
+                      checked={includeBaselineControls}
+                      onChange={(e) => setIncludeBaselineControls(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-[11px] font-medium text-blue-900">
+                      Automatically import {selectedPreset.controls.length} curated baseline controls into workspace
+                    </span>
+                  </label>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
 

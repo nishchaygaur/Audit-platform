@@ -32,6 +32,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
 import { hasPermission } from "@/lib/rbac";
 import { getStoredEvidence, saveStoredEvidence, EvidenceItem } from "@/lib/grcData";
+import { FRAMEWORK_PRESETS } from "@/lib/framework-presets";
 
 /* ============================================================
    FRAMEWORK CONTROLS CATALOG
@@ -44,56 +45,16 @@ type FrameworkControl = {
   description: string;
 };
 
-const FRAMEWORK_CONTROLS: Record<string, FrameworkControl[]> = {
-  "ISO 27001": [
-    { id: "A.5.1", title: "Policies for information security", category: "Organizational Controls", description: "Information security policies defined, approved, published and reviewed." },
-    { id: "A.5.2", title: "Information security roles and responsibilities", category: "Organizational Controls", description: "Security responsibilities defined and allocated according to business needs." },
-    { id: "A.5.15", title: "Access control", category: "Organizational Controls", description: "Rules for access to information and other associated assets defined and applied." },
-    { id: "A.5.23", title: "Information security for cloud services", category: "Organizational Controls", description: "Processes for acquisition, use, management, and exit of cloud services." },
-    { id: "A.6.3", title: "Information security awareness and training", category: "People Controls", description: "Appropriate awareness education and regular updates for all staff." },
-    { id: "A.8.2", title: "Privileged access rights", category: "Technological Controls", description: "Allocation and use of privileged access rights restricted and monitored." },
-    { id: "A.8.7", title: "Protection against malware", category: "Technological Controls", description: "Protection against malware implemented and supported by user awareness." },
-    { id: "A.8.15", title: "Logging and monitoring", category: "Technological Controls", description: "Logs recording user activities, exceptions, and faults produced and kept." },
-    { id: "A.8.20", title: "Network security", category: "Technological Controls", description: "Networks and network services secured, monitored, and controlled." },
-    { id: "A.8.28", title: "Secure coding", category: "Technological Controls", description: "Principles for secure coding applied to software development." },
-  ],
-  "NIST CSF": [
-    { id: "GV.OC-01", title: "Organizational Context", category: "Govern", description: "Organizational mission and objectives inform cybersecurity risk management." },
-    { id: "ID.AM-01", title: "Inventories of Hardware", category: "Identify", description: "Physical devices and systems within the organization are inventoried." },
-    { id: "PR.AA-01", title: "Identity & Credentials", category: "Protect", description: "Identities and credentials are authenticated and access managed." },
-    { id: "PR.AT-01", title: "Awareness & Training", category: "Protect", description: "Personnel are informed and trained to perform cybersecurity duties." },
-    { id: "PR.DS-01", title: "Data-at-Rest Protection", category: "Protect", description: "Data at rest is protected using cryptographic mechanisms." },
-    { id: "DE.CM-01", title: "Network Monitoring", category: "Detect", description: "The network is monitored to identify potential cybersecurity events." },
-    { id: "DE.CM-08", title: "Vulnerability Management", category: "Detect", description: "Vulnerability scans are performed and deficiencies prioritized." },
-    { id: "RS.MA-01", title: "Incident Response Execution", category: "Respond", description: "Response plan is executed during or after an incident." },
-    { id: "RC.RP-01", title: "Recovery Plan Execution", category: "Recover", description: "Recovery processes and procedures are executed to restore systems." },
-  ],
-  "SOC 2": [
-    { id: "CC5.1", title: "Control Environment & Integrity", category: "Common Criteria", description: "Demonstrates commitment to integrity and ethical values." },
-    { id: "CC6.1", title: "Logical and Physical Access Security", category: "Common Criteria", description: "Logical access to assets is restricted to authorized personnel." },
-    { id: "CC6.3", title: "Role Lifecycle & Access Revocation", category: "Common Criteria", description: "Role changes and access terminations are handled in a timely manner." },
-    { id: "CC7.1", title: "Vulnerability & Threat Detection", category: "Common Criteria", description: "Monitors infrastructure to identify unauthorized changes or events." },
-    { id: "CC7.3", title: "Incident Response Procedures", category: "Common Criteria", description: "Incidents are detected, escalated, analyzed, and mitigated." },
-    { id: "CC8.1", title: "Change Management & Authorization", category: "Common Criteria", description: "Authorizes, tests, and documents changes to infrastructure." },
-    { id: "A1.2", title: "Availability & Capacity Monitoring", category: "Availability", description: "Capacity planning and availability monitoring for continuous operations." },
-  ],
-  "NIST 800-53": [
-    { id: "AC-2", title: "Account Management", category: "Access Control", description: "Manages information system accounts including creation, review, and termination." },
-    { id: "AC-3", title: "Access Enforcement", category: "Access Control", description: "Enforces approved authorizations for logical access." },
-    { id: "AT-2", title: "Security Awareness Training", category: "Awareness & Training", description: "Basic security awareness training for all users." },
-    { id: "AU-2", title: "Event Logging", category: "Audit & Accountability", description: "Identifies which event types the system is capable of logging." },
-    { id: "IA-2", title: "Identification & Authentication", category: "Identification", description: "Uniquely identifies and authenticates organizational users." },
-    { id: "SI-4", title: "Information System Monitoring", category: "System Integrity", description: "Monitors systems to detect attacks and indicators of compromise." },
-  ],
-  "NIST RMF": [
-    { id: "RMF-1", title: "Categorize Information System", category: "Categorize", description: "Categorize the system and information processed based on impact." },
-    { id: "RMF-2", title: "Select Security Controls", category: "Select", description: "Select an initial set of baseline controls and tailor them." },
-    { id: "RMF-3", title: "Implement Security Controls", category: "Implement", description: "Implement the security controls and describe how they are employed." },
-    { id: "RMF-4", title: "Assess Security Controls", category: "Assess", description: "Assess security controls using appropriate assessment procedures." },
-    { id: "RMF-5", title: "Authorize System", category: "Authorize", description: "Authorize system operation based on risk determination." },
-    { id: "RMF-6", title: "Monitor Security Controls", category: "Monitor", description: "Continuously monitor controls and security posture." },
-  ],
-};
+const FRAMEWORK_CONTROLS: Record<string, FrameworkControl[]> = {};
+
+for (const p of FRAMEWORK_PRESETS) {
+  FRAMEWORK_CONTROLS[p.shortName] = p.controls.map((c) => ({
+    id: c.id,
+    title: c.title,
+    category: c.domain,
+    description: c.description,
+  }));
+}
 
 /* ============================================================
    HELPERS
@@ -453,11 +414,7 @@ export default function AuditsPage() {
                   value={frameworkFilter}
                   options={[
                     "All Frameworks",
-                    "ISO 27001",
-                    "NIST CSF",
-                    "NIST 800-53",
-                    "NIST RMF",
-                    "SOC 2",
+                    ...FRAMEWORK_PRESETS.map((p) => p.shortName),
                   ]}
                   onChange={setFrameworkFilter}
                 />
@@ -871,11 +828,11 @@ export default function AuditsPage() {
                           onChange={(e) => handleFrameworkChange(e.target.value)}
                           className="h-9 w-full appearance-none rounded-md border border-slate-200 bg-white px-3 pr-8 text-[12px] outline-none focus:border-blue-400"
                         >
-                          <option value="ISO 27001">ISO 27001:2022</option>
-                          <option value="NIST CSF">NIST Cybersecurity Framework (CSF)</option>
-                          <option value="SOC 2">SOC 2 Type II</option>
-                          <option value="NIST 800-53">NIST SP 800-53 Rev. 5</option>
-                          <option value="NIST RMF">NIST Risk Management Framework</option>
+                          {FRAMEWORK_PRESETS.map((p) => (
+                            <option key={p.id} value={p.shortName}>
+                              {p.shortName} - {p.name}
+                            </option>
+                          ))}
                         </select>
                         <ChevronDown className="pointervents-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                       </div>
