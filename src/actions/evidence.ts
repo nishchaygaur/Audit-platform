@@ -6,6 +6,7 @@ import { logAuditEvent } from "./audit-trail";
 import crypto from "crypto";
 import path from "path";
 import storage from "@/lib/storage";
+import { analyzeEvidenceArtifact, type AIEvidenceAnalysis } from "@/lib/gemini";
 
 export type EvidenceStatus =
   | "Requested"
@@ -72,6 +73,9 @@ export type EvidenceRecord = {
   reviewed_by: string;
   storage_key?: string;
   mime_type?: string;
+  ai_status?: string;
+  ai_confidence?: number;
+  ai_analysis?: string;
   created_at: string;
   updated_at?: string;
   audit_name?: string;
@@ -784,5 +788,125 @@ export async function getEvidenceDownloadUrl(
     return { success: false, error: message };
   }
 }
+
+/**
+ * Analyzes an evidence artifact using Gemini 3.8 Flash against its associated compliance control.
+ * Updates the evidence record with ai_status, ai_confidence, and ai_analysis JSON.
+ */
+export async function analyzeEvidenceWithAI(
+  workspaceId: string,
+  evidenceId: string
+): Promise<{ success: boolean; data?: AIEvidenceAnalysis; error?: string }> {
+  if (!workspaceId || !evidenceId) {
+    return { success: false, error: "Workspace ID and Evidence ID are required" };
+  }
+
+  try {
+    await requirePermission("evidence.view", workspaceId);
+
+    const record = await db.queryOne<EvidenceRecord>(
+      `
+      SELECT e.*, a.name as audit_name
+      FROM evidence e
+      JOIN audits a ON e.audit_id = a.id
+      WHERE e.id = $1 AND a.workspace_id = $2
+      `,
+      [evidenceId, workspaceId]
+    );
+
+    if (!record) {
+      return { success: false, error: "Evidence artifact not found in this workspace" };
+    }
+
+    // Attempt to fetch matching control details
+    const controlInfo = await db.queryOne<{ title: string; description: string; domain: string }>(
+      `
+      SELECT title, description, domain
+      FROM controls
+      WHERE id = $1 OR title ILIKE $2
+      LIMIT 1
+      `,
+      [record.control, `%${record.control}%`]
+    );
+
+    const analysis = await analyzeEvidenceArtifact({
+      name: record.name,
+      type: record.type,
+      size: record.size,
+      description: record.description,
+      controlId: record.control,
+      controlTitle: controlInfo?.title || record.control,
+      controlRequirement: controlInfo?.description,
+      framework: record.framework || "ISO 27001",
+    });
+
+    const analysisJson = JSON.stringify(analysis);
+
+    await db.execute(
+      `
+      UPDATE evidence
+      SET ai_status = $1, ai_confidence = $2, ai_analysis = $3, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4 AND workspace_id = $5
+      `,
+      [analysis.status, analysis.confidenceScore, analysisJson, evidenceId, workspaceId]
+    );
+
+    await logAuditEvent({
+      workspaceId,
+      action: "UPDATE",
+      entityType: "Evidence",
+      entityId: evidenceId,
+      description: `Gemini AI pre-scan evaluated "${record.name}": ${analysis.status} (${analysis.confidenceScore}% confidence)`,
+      details: {
+        evidenceId,
+        status: analysis.status,
+        confidence: analysis.confidenceScore,
+        model: analysis.model,
+      },
+    });
+
+    return { success: true, data: analysis };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to run AI evidence pre-scan";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Runs batch AI pre-scan across all evidence for a specific audit or workspace.
+ */
+export async function batchAnalyzeEvidence(
+  workspaceId: string,
+  auditId?: string
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  if (!workspaceId) {
+    return { success: false, error: "Workspace ID is required" };
+  }
+
+  try {
+    await requirePermission("evidence.update", workspaceId);
+
+    const evidences = await db.query<EvidenceRecord>(
+      auditId
+        ? `SELECT * FROM evidence WHERE workspace_id = $1 AND audit_id = $2`
+        : `SELECT * FROM evidence WHERE workspace_id = $1`,
+      auditId ? [workspaceId, auditId] : [workspaceId]
+    );
+
+    let processedCount = 0;
+    for (const ev of evidences) {
+      const res = await analyzeEvidenceWithAI(workspaceId, ev.id);
+      if (res.success) {
+        processedCount++;
+      }
+    }
+
+    return { success: true, count: processedCount };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to run batch AI pre-scan";
+    return { success: false, error: message };
+  }
+}
+
 
 

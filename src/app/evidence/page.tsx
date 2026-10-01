@@ -30,7 +30,14 @@ import {
   ChevronDown,
   Download,
   Link2,
+  Sparkles,
+  FileArchive,
+  Layers3,
+  ClipboardList,
 } from "lucide-react";
+import AIEvidenceModal from "@/components/evidence/AIEvidenceModal";
+import PBCRequestsView from "@/components/evidence/PBCRequestsView";
+import { generateAuditDossierZip } from "@/actions/dossier";
 
 type EvidenceStatus =
   | "Requested"
@@ -54,6 +61,9 @@ type Evidence = {
   uploaded: string;
   reviewedBy: string;
   description?: string;
+  ai_status?: string;
+  ai_confidence?: number;
+  ai_analysis?: string;
 };
 
 const STATUS_OPTIONS: EvidenceStatus[] = [
@@ -78,6 +88,10 @@ export default function EvidencePage() {
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [audits, setAudits] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [activeMainTab, setActiveMainTab] = useState<"vault" | "pbc">("vault");
+  const [aiModalEvidence, setAiModalEvidence] = useState<Evidence | null>(null);
+  const [exportingDossier, setExportingDossier] = useState(false);
 
   const [formAuditId, setFormAuditId] = useState("");
 
@@ -112,6 +126,9 @@ export default function EvidencePage() {
             uploaded: e.date || "Today",
             reviewedBy: e.reviewed_by || "—",
             description: e.description || "",
+            ai_status: e.ai_status,
+            ai_confidence: e.ai_confidence,
+            ai_analysis: e.ai_analysis,
           }))
         );
       } else {
@@ -425,6 +442,27 @@ export default function EvidencePage() {
     setOpenMenu(null);
   }
 
+  const handleExportDossier = async () => {
+    if (!currentWorkspace?.id) return;
+    const targetAuditId = audits[0]?.id || "AUD-2024-001";
+    setExportingDossier(true);
+    try {
+      const res = await generateAuditDossierZip(currentWorkspace.id, targetAuditId);
+      if (res.success && res.zipBase64) {
+        const link = document.createElement("a");
+        link.href = `data:application/zip;base64,${res.zipBase64}`;
+        link.download = res.filename || `audit-dossier-${targetAuditId}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error("Dossier export failed:", err);
+    } finally {
+      setExportingDossier(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">
       {/* 
@@ -458,16 +496,77 @@ export default function EvidencePage() {
               </div>
             </div>
 
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportDossier}
+                disabled={exportingDossier}
+                className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+                title="Download offline regulatory dossier with SHA-256 manifest and PDF report"
+              >
+                <FileArchive className="h-4 w-4 text-purple-600" />
+                {exportingDossier ? "Exporting Dossier..." : "Export Dossier (ZIP)"}
+              </button>
+
+              <button
+                type="button"
+                onClick={openAddEvidence}
+                className="flex h-9 items-center gap-2 rounded-md bg-blue-600 px-4 text-[12px] font-medium text-white hover:bg-blue-700 transition"
+              >
+                <Upload className="h-4 w-4" />
+                Add Evidence
+              </button>
+            </div>
+          </div>
+
+          {/* MAIN TABS: Evidence Vault vs PBC Requests */}
+          <div className="mb-6 flex border-b border-slate-200 gap-6">
             <button
               type="button"
-              onClick={openAddEvidence}
-              className="flex h-9 items-center gap-2 rounded-md bg-blue-600 px-4 text-[12px] font-medium text-white hover:bg-blue-700"
+              onClick={() => setActiveMainTab("vault")}
+              className={`flex items-center gap-2 pb-3 text-[13px] font-semibold transition relative ${
+                activeMainTab === "vault"
+                  ? "text-blue-600"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
             >
-              <Upload className="h-4 w-4" />
-              Add Evidence
+              <FileText className="h-4 w-4" />
+              Evidence Vault
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                {totalEvidence}
+              </span>
+              {activeMainTab === "vault" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("pbc")}
+              className={`flex items-center gap-2 pb-3 text-[13px] font-semibold transition relative ${
+                activeMainTab === "pbc"
+                  ? "text-blue-600"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <ClipboardList className="h-4 w-4" />
+              PBC Evidence Requests (Client Workflow)
+              <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-bold">
+                Workflow
+              </span>
+              {activeMainTab === "pbc" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+              )}
             </button>
           </div>
 
+          {activeMainTab === "pbc" ? (
+            <PBCRequestsView
+              workspaceId={currentWorkspace?.id || ""}
+              audits={audits}
+            />
+          ) : (
+            <>
           {/* SUMMARY */}
 
           <div className="mb-5 grid grid-cols-4 gap-4">
@@ -590,6 +689,10 @@ export default function EvidencePage() {
                     </TableHeader>
 
                     <TableHeader>
+                      AI Pre-Scan
+                    </TableHeader>
+
+                    <TableHeader>
                       Uploaded
                     </TableHeader>
 
@@ -600,7 +703,7 @@ export default function EvidencePage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-12 text-center text-[12px] text-slate-500">
+                      <td colSpan={8} className="px-5 py-12 text-center text-[12px] text-slate-500">
                         Loading workspace evidence...
                       </td>
                     </tr>
@@ -645,12 +748,13 @@ export default function EvidencePage() {
                           void handleDownload(item);
                           setOpenMenu(null);
                         }}
+                        onOpenAiScan={(ev) => setAiModalEvidence(ev)}
                       />
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-5 py-12 text-center"
                       >
                         <Search className="mx-auto h-6 w-6 text-slate-300" />
@@ -729,6 +833,8 @@ export default function EvidencePage() {
               />
             </div>
           </div>
+          </>
+          )}
         </section>
       </main>
 
@@ -775,6 +881,30 @@ export default function EvidencePage() {
           onEdit={() => {
             setSelectedEvidence(null);
             openEditEvidence(selectedEvidence);
+          }}
+        />
+      )}
+
+      {aiModalEvidence && (
+        <AIEvidenceModal
+          isOpen={Boolean(aiModalEvidence)}
+          onClose={() => setAiModalEvidence(null)}
+          workspaceId={currentWorkspace?.id || ""}
+          evidence={{
+            id: aiModalEvidence.id,
+            reference: aiModalEvidence.evidenceId,
+            name: aiModalEvidence.name,
+            control: aiModalEvidence.control,
+            framework: aiModalEvidence.framework,
+            status: aiModalEvidence.status,
+            ai_status: aiModalEvidence.ai_status,
+            ai_confidence: aiModalEvidence.ai_confidence,
+            ai_analysis: aiModalEvidence.ai_analysis,
+          }}
+          onSuccess={() => {
+            if (currentWorkspace?.id) {
+              loadData(currentWorkspace.id);
+            }
           }}
         />
       )}
@@ -905,6 +1035,7 @@ function EvidenceRow({
   onReject,
   onDelete,
   onDownload,
+  onOpenAiScan,
 }: {
   item: Evidence;
   menuOpen: boolean;
@@ -915,6 +1046,7 @@ function EvidenceRow({
   onReject: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  onOpenAiScan: (item: Evidence) => void;
 }) {
   const statusClass =
     item.status === "Accepted"
@@ -976,6 +1108,30 @@ function EvidenceRow({
         >
           {item.status}
         </span>
+      </td>
+
+      <td className="px-3 py-4">
+        {item.ai_confidence ? (
+          <button
+            type="button"
+            onClick={() => onOpenAiScan(item)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50/90 px-2.5 py-1 text-[10px] font-semibold text-purple-700 hover:bg-purple-100 transition shadow-2xs"
+            title="Click to view Gemini AI audit review"
+          >
+            <Sparkles className="h-3 w-3 text-purple-600" />
+            <span>{item.ai_confidence}% {item.ai_status || "Evaluated"}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onOpenAiScan(item)}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50/40 transition shadow-2xs"
+            title="Run Gemini 3.8 Flash automated pre-scan"
+          >
+            <Sparkles className="h-3 w-3 text-purple-500" />
+            Pre-Scan
+          </button>
+        )}
       </td>
 
       <td className="px-3 py-4">

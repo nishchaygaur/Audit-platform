@@ -219,8 +219,41 @@ export const POSTGRES_SCHEMA_SQL = `
     reviewed_by TEXT DEFAULT '',
     storage_key TEXT DEFAULT '',
     mime_type TEXT DEFAULT 'application/octet-stream',
+    ai_status TEXT DEFAULT '',
+    ai_confidence INTEGER DEFAULT 0,
+    ai_analysis TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS evidence_requests (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    audit_id TEXT NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
+    control_id TEXT NOT NULL DEFAULT '',
+    control_title TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    priority TEXT NOT NULL DEFAULT 'Medium',
+    status TEXT NOT NULL DEFAULT 'Requested',
+    assigned_to TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    evidence_id TEXT,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS evidence_comments (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    request_id TEXT,
+    evidence_id TEXT,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    user_role TEXT NOT NULL DEFAULT 'Auditor',
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS audit_trail (
@@ -244,6 +277,11 @@ export const POSTGRES_SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_risks_audit ON risks(audit_id);
   CREATE INDEX IF NOT EXISTS idx_evidence_workspace ON evidence(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_evidence_audit ON evidence(audit_id);
+  CREATE INDEX IF NOT EXISTS idx_evidence_requests_workspace ON evidence_requests(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_evidence_requests_audit ON evidence_requests(audit_id);
+  CREATE INDEX IF NOT EXISTS idx_evidence_requests_status ON evidence_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_evidence_comments_request ON evidence_comments(request_id);
+  CREATE INDEX IF NOT EXISTS idx_evidence_comments_evidence ON evidence_comments(evidence_id);
   CREATE INDEX IF NOT EXISTS idx_audit_trail_workspace ON audit_trail(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_audit_trail_created_at ON audit_trail(created_at);
   CREATE INDEX IF NOT EXISTS idx_audit_trail_entity ON audit_trail(entity_type, entity_id);
@@ -384,15 +422,55 @@ async function seedBaselineData(pool: Pool): Promise<void> {
   }
 }
 
+async function seedBaselineRequests(pool: Pool): Promise<void> {
+  try {
+    const reqCount = await pool.query<{ count: string | number }>('SELECT COUNT(*) as count FROM evidence_requests');
+    if (Number(reqCount.rows[0]?.count || 0) === 0) {
+      const auditRes = await pool.query<{ id: string; workspace_id: string }>('SELECT id, workspace_id FROM audits LIMIT 1');
+      if (auditRes.rows.length > 0) {
+        const audit = auditRes.rows[0];
+        const req1Id = 'REQ-2024-001';
+        const req2Id = 'REQ-2024-002';
+        const req3Id = 'REQ-2024-003';
+        const req4Id = 'REQ-2024-004';
+
+        await pool.query(`
+          INSERT INTO evidence_requests (id, workspace_id, audit_id, control_id, control_title, title, description, priority, status, assigned_to, due_date, created_by)
+          VALUES
+            ($1, $2, $3, 'A.8.2', 'Privileged Access Rights', 'Quarterly IAM Privileged Account Listing & MFA Policy Export', 'Export all active administrator and root accounts from Okta/Entra ID with MFA status verification.', 'High', 'Under Review', 'Michael Lee', '2026-10-15', 'John Carter (Lead Auditor)'),
+            ($4, $2, $3, 'A.5.1', 'Policies for information security', 'Annual Master Information Security Policy Sign-off', 'Provide current Information Security Policy approved and countersigned by CISO and executive committee.', 'Critical', 'Approved', 'Alice Smith', '2026-10-10', 'John Carter (Lead Auditor)'),
+            ($5, $2, $3, 'A.5.23', 'Cloud Services Security', 'Multi-Cloud Vendor SOC 2 Type II Reports & Risk Assessments', 'Gather latest third-party assurance attestations for AWS, Cloudflare, and primary SaaS infrastructure vendors.', 'Medium', 'Requested', 'David Wilson', '2026-10-25', 'John Carter (Lead Auditor)'),
+            ($6, $2, $3, 'A.8.15', 'Logging & SIEM', 'SIEM 365-Day Log Retention Configuration & Hot/Cold Tier Proof', 'Provide architectural configuration screenshot or Terraform definition demonstrating immutable 365-day security log archiving.', 'High', 'Requested', 'Michael Lee', '2026-10-30', 'John Carter (Lead Auditor)')
+          ON CONFLICT (id) DO NOTHING;
+        `, [req1Id, audit.workspace_id, audit.id, req2Id, req3Id, req4Id]);
+
+        await pool.query(`
+          INSERT INTO evidence_comments (id, workspace_id, request_id, user_id, user_name, user_role, message, created_at)
+          VALUES
+            ('COM-001', $1, $2, 'usr_auditor', 'John Carter', 'Auditor', 'Please ensure the export includes temporary elevated service accounts alongside personal admin accounts.', NOW() - INTERVAL '2 days'),
+            ('COM-002', $1, $2, 'usr_auditee', 'Michael Lee', 'Auditee', 'Uploaded the Entra ID privileged report. Root accounts are enrolled in FIDO2 hardware keys as shown on page 3.', NOW() - INTERVAL '1 day'),
+            ('COM-003', $1, $2, 'usr_auditor', 'John Carter', 'Auditor', 'Reviewing the submission now. Hardware token enrollment verified; checking break-glass account monitoring.', NOW() - INTERVAL '4 hours')
+          ON CONFLICT (id) DO NOTHING;
+        `, [audit.workspace_id, req1Id]);
+      }
+    }
+  } catch (err) {
+    console.error("Baseline evidence requests seeding skipped or failed:", err);
+  }
+}
+
 export async function ensureSchema(): Promise<void> {
   if (!schemaInitialized) {
     schemaInitialized = (async () => {
       const pool = getPool();
       await pool.query(POSTGRES_SCHEMA_SQL);
-      // Idempotent column migrations for evidence storage
+      // Idempotent column migrations for evidence storage and AI review
       await pool.query(`
         ALTER TABLE evidence ADD COLUMN IF NOT EXISTS storage_key TEXT DEFAULT '';
         ALTER TABLE evidence ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'application/octet-stream';
+        ALTER TABLE evidence ADD COLUMN IF NOT EXISTS ai_status TEXT DEFAULT '';
+        ALTER TABLE evidence ADD COLUMN IF NOT EXISTS ai_confidence INTEGER DEFAULT 0;
+        ALTER TABLE evidence ADD COLUMN IF NOT EXISTS ai_analysis TEXT DEFAULT '';
         ALTER TABLE evidence ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
       `).catch(() => {});
       // Idempotent column migrations for users authentication mapping
@@ -403,6 +481,7 @@ export async function ensureSchema(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_users_supabase_user_id ON users(supabase_user_id);
       `).catch(() => {});
       await seedBaselineData(pool);
+      await seedBaselineRequests(pool);
     })().catch((err) => {
       schemaInitialized = null;
       console.error("Schema initialization failed:", err);

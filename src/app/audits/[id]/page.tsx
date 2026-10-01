@@ -25,7 +25,10 @@ import {
   UsersRound,
   Wrench,
   X,
+  Sparkles,
 } from "lucide-react";
+
+import AIEvidenceModal from "@/components/evidence/AIEvidenceModal";
 
 import Header from "@/components/layout/Header";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -1369,6 +1372,7 @@ function EvidencePanel({ audit }: { audit: Audit }) {
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceRecord | null>(null);
+  const [aiModalEvidence, setAiModalEvidence] = useState<EvidenceRecord | null>(null);
 
   // Form state for Upload
   const [formName, setFormName] = useState("");
@@ -1589,6 +1593,24 @@ function EvidencePanel({ audit }: { audit: Audit }) {
 
                 <button
                   type="button"
+                  onClick={() => setAiModalEvidence(item)}
+                  className={`flex h-7 items-center gap-1 rounded border px-2 text-[10px] font-medium transition ${
+                    item.ai_status === "valid"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      : item.ai_status === "gap_detected"
+                      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      : item.ai_status === "invalid"
+                      ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                      : "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
+                  }`}
+                  title="Run or view Gemini AI Evidence Pre-Scan"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {item.ai_status ? `AI: ${item.ai_status.replace("_", " ")}` : "AI Scan"}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setSelectedEvidence(item)}
                   className="flex h-7 items-center gap-1 rounded border border-slate-200 px-2 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
                 >
@@ -1805,6 +1827,17 @@ function EvidencePanel({ audit }: { audit: Audit }) {
             </div>
           </div>
         </div>
+      )}
+
+      {aiModalEvidence && (
+        <AIEvidenceModal
+          evidence={aiModalEvidence}
+          workspaceId={currentWorkspace?.id || ""}
+          onClose={() => setAiModalEvidence(null)}
+          onSuccess={() => {
+            loadEvidence();
+          }}
+        />
       )}
     </section>
   );
@@ -3346,14 +3379,26 @@ function ReportsPanel({ audit }: { audit: Audit }) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowGenerateModal(true)}
-          className="flex h-9 items-center gap-2 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white transition hover:bg-blue-700"
-        >
-          <FileText className="h-3.5 w-3.5" />
-          Generate Report
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/audits/${audit.id}/dossier?workspaceId=${currentWorkspace?.id || ""}`}
+            download
+            className="flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-[11px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+            title="Download full audit report PDF + workpapers + SHA-256 hash manifest in a ZIP package"
+          >
+            <Download className="h-3.5 w-3.5 text-blue-600" />
+            Export Dossier (ZIP + SHA-256)
+          </a>
+
+          <button
+            type="button"
+            onClick={() => setShowGenerateModal(true)}
+            className="flex h-9 items-center gap-2 rounded-md bg-blue-600 px-4 text-[11px] font-medium text-white transition hover:bg-blue-700"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Generate Report
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 border-b border-slate-100">

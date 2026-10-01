@@ -26,6 +26,7 @@ import {
   getControls,
   createControl,
 } from "@/actions/frameworks";
+import CrossMappingView from "@/components/frameworks/CrossMappingView";
 
 type FrameworkStatus = "Active" | "Available";
 
@@ -53,6 +54,7 @@ type Control = {
 export default function FrameworksPage() {
   const { currentWorkspace } = useWorkspace();
 
+  const [frameworkTab, setFrameworkTab] = useState<"catalog" | "crosswalk">("catalog");
   const [frameworks, setFrameworks] = useState<Framework[]>([]);
   const [controlsByFramework, setControlsByFramework] = useState<
     Record<string, Control[]>
@@ -328,7 +330,40 @@ export default function FrameworksPage() {
             </button>
           </div>
 
-          {/* SUMMARY */}
+          {/* TAB NAVIGATION */}
+          <div className="mb-6 flex border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setFrameworkTab("catalog")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                frameworkTab === "catalog"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Layers3 className="h-4 w-4" />
+              Framework Catalog & Libraries
+            </button>
+            <button
+              type="button"
+              onClick={() => setFrameworkTab("crosswalk")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                frameworkTab === "crosswalk"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Cross-Walk Matrix & Multi-Mapping (ISO ↔ SOC 2 ↔ NIST)
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">P2</span>
+            </button>
+          </div>
+
+          {frameworkTab === "crosswalk" ? (
+            <CrossMappingView workspaceId={currentWorkspace.id} />
+          ) : (
+            <>
+              {/* SUMMARY */}
 
           <div className="mb-5 grid grid-cols-4 gap-4">
 
@@ -522,6 +557,8 @@ export default function FrameworksPage() {
             </div>
 
           </div>
+            </>
+          )}
 
         </section>
       </main>

@@ -175,9 +175,10 @@ export class SimplePdfDocument {
 }
 
 /**
- * Synthesize and download a formal audit report PDF from a ReportRecord.
+ * Compiles a formal audit report PDF into raw bytes from a ReportRecord.
+ * Fully compatible with server-side and client-side execution.
  */
-export function downloadReportPdf(report: ReportRecord) {
+export function compileReportPdfBytes(report: ReportRecord): Uint8Array {
   const doc = new SimplePdfDocument();
   const c = report.content || {};
 
@@ -281,7 +282,14 @@ export function downloadReportPdf(report: ReportRecord) {
       `Based on the audit fieldwork conducted, the governance posture stands aligned with applicable ${report.framework} baselines subject to prompt remediation of identified findings.`
   );
 
-  const pdfBytes = doc.buildPdf();
+  return doc.buildPdf();
+}
+
+/**
+ * Synthesize and download a formal audit report PDF from a ReportRecord in the browser.
+ */
+export function downloadReportPdf(report: ReportRecord) {
+  const pdfBytes = compileReportPdfBytes(report);
   const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
