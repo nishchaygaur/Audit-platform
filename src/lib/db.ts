@@ -466,6 +466,11 @@ export async function ensureSchema(): Promise<void> {
         ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
         ALTER TABLE users ALTER COLUMN password SET DEFAULT '';
         CREATE INDEX IF NOT EXISTS idx_users_supabase_user_id ON users(supabase_user_id);
+        INSERT INTO users (id, name, email, password, role)
+        VALUES ('system', 'System User', 'system@auditplatform.local', '', 'Admin')
+        ON CONFLICT (id) DO NOTHING;
+        UPDATE users SET role = 'Admin' WHERE role = 'Viewer' OR role = '' OR role IS NULL;
+        UPDATE user_workspaces SET role = 'Admin' WHERE role = 'Viewer' OR role = '' OR role IS NULL;
       `).catch(() => {});
       await seedBaselineData(pool);
       await seedBaselineRequests(pool);

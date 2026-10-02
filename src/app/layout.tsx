@@ -8,6 +8,7 @@ import { AuditProvider } from "@/context/AuditContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { getSession } from "@/lib/auth";
 import { getUserWorkspaces } from "@/actions/workspace";
+import TopProgressBar from "@/components/common/TopProgressBar";
 
 export const metadata: Metadata = {
   title: "Audit Platform",
@@ -51,6 +52,9 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#f6f8fc] dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 antialiased selection:bg-blue-600 selection:text-white">
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
         <ThemeProvider>
           <AuthProvider initialUser={session ? session.user : null}>
             <WorkspaceProvider initialWorkspaces={initialWorkspaces}>

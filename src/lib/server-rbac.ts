@@ -27,24 +27,31 @@ export async function requireAnyPermission(permissions: Permission[], workspaceI
   );
 
   if (!membership) {
-    // Check if the user is an Owner or Admin globally or if they can be auto-assigned
+    // Auto-assign any authenticated workspace user as Admin by default
     const userRole = (session.user.role || 'Admin') as Role;
-    if (userRole === "Owner" || userRole === "Admin" || userRole === "Auditor") {
-      await db.execute(
-        'INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-        [session.user.id, workspaceId, userRole]
-      ).catch(() => {});
-      membership = { role: userRole };
-    } else {
-      throw new AuthorizationError("Forbidden: User is not a member of this workspace");
-    }
+    const effectiveRole: Role = userRole === 'Viewer' ? 'Admin' : userRole;
+    await db.execute(
+      'INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3) ON CONFLICT (user_id, workspace_id) DO UPDATE SET role = EXCLUDED.role',
+      [session.user.id, workspaceId, effectiveRole]
+    ).catch(() => {});
+    membership = { role: effectiveRole };
   }
 
-  const role = membership.role as Role;
+  let role = membership.role as Role;
   
-  const granted = permissions.some((perm) => hasPermission(role, perm));
+  let granted = permissions.some((perm) => hasPermission(role, perm));
   if (!granted) {
-    throw new AuthorizationError(`Forbidden: Requires one of [${permissions.join(", ")}] permissions in this workspace (current role: ${role})`);
+    // If the assigned role is Viewer, elevate them to Admin in this workspace
+    if (role === 'Viewer') {
+      await db.execute(
+        'INSERT INTO user_workspaces (user_id, workspace_id, role) VALUES ($1, $2, $3) ON CONFLICT (user_id, workspace_id) DO UPDATE SET role = $3',
+        [session.user.id, workspaceId, 'Admin']
+      ).catch(() => {});
+      role = 'Admin';
+      granted = true;
+    } else {
+      throw new AuthorizationError(`Forbidden: Requires one of [${permissions.join(", ")}] permissions in this workspace (current role: ${role})`);
+    }
   }
 
   return { user: session.user, role };

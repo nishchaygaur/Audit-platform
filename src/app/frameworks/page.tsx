@@ -110,44 +110,52 @@ export default function FrameworksPage() {
   });
 
   const loadData = async () => {
-    if (!currentWorkspace?.id) return;
+    if (!currentWorkspace?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const res = await getFrameworks(currentWorkspace.id);
-    if (res.success && res.data) {
-      setFrameworks(
-        res.data.map((f: any) => ({
-          id: f.id,
-          name: f.name,
-          shortName: f.short_name,
-          description: f.description,
-          controls: f.controls_count || 0,
-          mapped: f.mapped_count || 0,
-          audits: f.audits_count || 0,
-          status: f.status,
-          category: f.category,
-          version: f.version,
-        }))
-      );
-    }
-
-    const cRes = await getControls(currentWorkspace.id);
-    if (cRes.success && cRes.data) {
-      const grouped: Record<string, Control[]> = {};
-      for (const c of cRes.data) {
-        if (!grouped[c.framework_id]) {
-          grouped[c.framework_id] = [];
-        }
-        grouped[c.framework_id].push({
-          id: c.id,
-          title: c.title,
-          description: c.description,
-          domain: c.domain,
-          status: c.status,
-        });
+    try {
+      const res = await getFrameworks(currentWorkspace.id);
+      if (res.success && res.data) {
+        setFrameworks(
+          res.data.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            shortName: f.short_name,
+            description: f.description,
+            controls: f.controls_count || 0,
+            mapped: f.mapped_count || 0,
+            audits: f.audits_count || 0,
+            status: f.status,
+            category: f.category,
+            version: f.version,
+          }))
+        );
       }
-      setControlsByFramework(grouped);
+
+      const cRes = await getControls(currentWorkspace.id);
+      if (cRes.success && cRes.data) {
+        const grouped: Record<string, Control[]> = {};
+        for (const c of cRes.data) {
+          if (!grouped[c.framework_id]) {
+            grouped[c.framework_id] = [];
+          }
+          grouped[c.framework_id].push({
+            id: c.id,
+            title: c.title,
+            description: c.description,
+            domain: c.domain,
+            status: c.status,
+          });
+        }
+        setControlsByFramework(grouped);
+      }
+    } catch (err) {
+      console.error("Failed to load frameworks data:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -354,7 +362,7 @@ export default function FrameworksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f8fc] text-[#111827]">
+    <div className="min-h-screen bg-[#f6f8fc] text-[#111827] dark:bg-[#0b0f19] dark:text-slate-100">
       <main className="ml-[250px] min-h-screen">
         <section className="px-8 py-7">
 
@@ -362,19 +370,19 @@ export default function FrameworksPage() {
 
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
                 <Layers3
-                  className="h-5 w-5 text-blue-600"
+                  className="h-5 w-5 text-blue-600 dark:text-blue-400"
                   strokeWidth={1.8}
                 />
               </div>
 
               <div>
-                <h1 className="text-[23px] font-semibold">
+                <h1 className="text-[23px] font-semibold text-slate-900 dark:text-white">
                   Frameworks
                 </h1>
 
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                   Manage compliance frameworks, control libraries
                   and mappings for {currentWorkspace.name}.
                 </p>
@@ -395,14 +403,14 @@ export default function FrameworksPage() {
           </div>
 
           {/* TAB NAVIGATION */}
-          <div className="mb-6 flex border-b border-slate-200">
+          <div className="mb-6 flex border-b border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setFrameworkTab("catalog")}
               className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
                 frameworkTab === "catalog"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               <Layers3 className="h-4 w-4" />
@@ -413,13 +421,13 @@ export default function FrameworksPage() {
               onClick={() => setFrameworkTab("crosswalk")}
               className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
                 frameworkTab === "crosswalk"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               <ShieldCheck className="h-4 w-4" />
               Cross-Walk Matrix & Multi-Mapping (ISO ↔ SOC 2 ↔ NIST)
-              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">P2</span>
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">P2</span>
             </button>
           </div>
 
@@ -474,11 +482,11 @@ export default function FrameworksPage() {
 
           {/* MAIN PANEL */}
 
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900">
 
             {/* TOOLBAR */}
 
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-5 py-4">
 
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -490,7 +498,7 @@ export default function FrameworksPage() {
                     setSearch(event.target.value)
                   }
                   placeholder="Search frameworks..."
-                  className="h-9 w-[330px] rounded-md border border-slate-200 bg-white pl-9 pr-3 text-[12px] outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                  className="h-9 w-[330px] rounded-md border border-slate-200 bg-white pl-9 pr-3 text-[12px] outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-900/40"
                 />
               </div>
 
@@ -501,10 +509,10 @@ export default function FrameworksPage() {
                   onClick={() =>
                     setStatusFilter("All")
                   }
-                  className={`rounded-md px-3 py-2 text-[10px] font-medium ${
+                  className={`rounded-md px-3 py-2 text-[10px] font-medium transition-colors ${
                     statusFilter === "All"
-                      ? "bg-slate-100 text-slate-700"
-                      : "text-slate-400 hover:bg-slate-50"
+                      ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                      : "text-slate-400 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50"
                   }`}
                 >
                   All
@@ -515,10 +523,10 @@ export default function FrameworksPage() {
                   onClick={() =>
                     setStatusFilter("Active")
                   }
-                  className={`rounded-md px-3 py-2 text-[10px] font-medium ${
+                  className={`rounded-md px-3 py-2 text-[10px] font-medium transition-colors ${
                     statusFilter === "Active"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-400 hover:bg-slate-50"
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                      : "text-slate-400 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50"
                   }`}
                 >
                   Active
@@ -529,10 +537,10 @@ export default function FrameworksPage() {
                   onClick={() =>
                     setStatusFilter("Available")
                   }
-                  className={`rounded-md px-3 py-2 text-[10px] font-medium ${
+                  className={`rounded-md px-3 py-2 text-[10px] font-medium transition-colors ${
                     statusFilter === "Available"
-                      ? "bg-slate-100 text-slate-700"
-                      : "text-slate-400 hover:bg-slate-50"
+                      ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                      : "text-slate-400 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50"
                   }`}
                 >
                   Available
@@ -546,18 +554,18 @@ export default function FrameworksPage() {
 
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
-                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 shadow-inner">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400" />
                 </div>
-                <p className="mt-3 text-[13px] font-semibold text-slate-800">
+                <p className="mt-3 text-[13px] font-semibold text-slate-800 dark:text-white">
                   Loading compliance frameworks...
                 </p>
-                <p className="mt-1 max-w-sm text-[11px] text-slate-400">
+                <p className="mt-1 max-w-sm text-[11px] text-slate-400 dark:text-slate-400">
                   Retrieving control catalogs, mapped frameworks, and audit stats for {currentWorkspace?.name || "workspace"}
                 </p>
               </div>
             ) : filteredFrameworks.length > 0 ? (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
 
                 {filteredFrameworks.map(
                   (framework) => (
@@ -598,13 +606,13 @@ export default function FrameworksPage() {
               </div>
             ) : (
               <div className="px-5 py-16 text-center">
-                <Layers3 className="mx-auto h-8 w-8 text-slate-300" />
+                <Layers3 className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
 
-                <p className="mt-3 text-[12px] font-medium text-slate-600">
+                <p className="mt-3 text-[12px] font-medium text-slate-600 dark:text-slate-300">
                   No frameworks found
                 </p>
 
-                <p className="mt-1 text-[10px] text-slate-400">
+                <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
                   Try changing your search or filter.
                 </p>
               </div>
@@ -614,20 +622,20 @@ export default function FrameworksPage() {
 
           {/* INFO */}
 
-          <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/50 px-5 py-4">
+          <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/50 px-5 py-4 dark:border-blue-900/40 dark:bg-blue-950/20">
 
             <div className="flex items-start gap-3">
 
-              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-blue-600">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs">
                 <ShieldCheck className="h-4 w-4" />
               </div>
 
               <div>
-                <p className="text-[11px] font-semibold text-blue-900">
+                <p className="text-[11px] font-semibold text-blue-900 dark:text-blue-300">
                   Framework mapping
                 </p>
 
-                <p className="mt-1 max-w-3xl text-[10px] leading-4 text-blue-700">
+                <p className="mt-1 max-w-3xl text-[10px] leading-4 text-blue-700 dark:text-blue-200">
                   Framework mappings allow the same organizational
                   control to satisfy requirements across multiple
                   standards. This helps reduce duplicate audit work
@@ -649,26 +657,26 @@ export default function FrameworksPage() {
       ===================================================== */}
 
       {selectedFramework && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 px-6">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs px-6">
 
-          <div className="max-h-[88vh] w-full max-w-[1100px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="max-h-[88vh] w-full max-w-[1100px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
 
             {/* HEADER */}
 
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4">
 
               <div className="flex items-center gap-3">
 
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
-                  <BookOpenCheck className="h-5 w-5 text-indigo-600" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/40">
+                  <BookOpenCheck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
 
                 <div>
-                  <h2 className="text-[15px] font-semibold text-slate-800">
+                  <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
                     {selectedFramework.name}
                   </h2>
 
-                  <p className="mt-0.5 text-[10px] text-slate-400">
+                  <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-400">
                     {selectedFramework.shortName} ·{" "}
                     {selectedFramework.version} ·{" "}
                     {selectedFramework.category}
@@ -682,7 +690,7 @@ export default function FrameworksPage() {
                 onClick={() =>
                   setSelectedFramework(null)
                 }
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -691,7 +699,7 @@ export default function FrameworksPage() {
 
             {/* SUMMARY */}
 
-            <div className="grid grid-cols-4 gap-3 border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+            <div className="grid grid-cols-4 gap-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 px-6 py-4">
 
               <DetailStat
                 label="Status"
@@ -726,11 +734,11 @@ export default function FrameworksPage() {
               <div className="mb-4 flex items-center justify-between">
 
                 <div>
-                  <h3 className="text-[13px] font-semibold text-slate-800">
+                  <h3 className="text-[13px] font-semibold text-slate-800 dark:text-white">
                     Control Library
                   </h3>
 
-                  <p className="mt-1 text-[10px] text-slate-400">
+                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-400">
                     Controls available for mapping into audits.
                   </p>
                 </div>
@@ -740,7 +748,7 @@ export default function FrameworksPage() {
                   onClick={() =>
                     setShowControlModal(true)
                   }
-                  className="flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-[10px] font-medium text-white hover:bg-blue-700"
+                  className="flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-[10px] font-medium text-white hover:bg-blue-700 shadow-xs"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add Control
@@ -748,49 +756,49 @@ export default function FrameworksPage() {
 
               </div>
 
-              <div className="overflow-hidden rounded-lg border border-slate-200">
+              <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
 
                 <table className="w-full border-collapse">
 
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/70 text-left">
+                    <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 text-left">
 
-                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Control
                       </th>
 
-                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Domain
                       </th>
 
-                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Description
                       </th>
 
-                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Mapping
                       </th>
 
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 
                     {(controlsByFramework[
                       selectedFramework.id
                     ] ?? []).map((control) => (
                       <tr
                         key={control.id}
-                        className="hover:bg-slate-50/60"
+                        className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40"
                       >
 
                         <td className="px-4 py-3 align-top">
 
-                          <p className="text-[11px] font-semibold text-blue-600">
+                          <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                             {control.id}
                           </p>
 
-                          <p className="mt-1 text-[10px] font-medium text-slate-700">
+                          <p className="mt-1 text-[10px] font-medium text-slate-700 dark:text-slate-200">
                             {control.title}
                           </p>
 
@@ -798,13 +806,13 @@ export default function FrameworksPage() {
 
                         <td className="px-4 py-3 align-top">
 
-                          <span className="rounded bg-slate-100 px-2 py-1 text-[9px] font-medium text-slate-600">
+                          <span className="rounded bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[9px] font-medium text-slate-600 dark:text-slate-300">
                             {control.domain}
                           </span>
 
                         </td>
 
-                        <td className="max-w-[430px] px-4 py-3 align-top text-[10px] leading-4 text-slate-400">
+                        <td className="max-w-[430px] px-4 py-3 align-top text-[10px] leading-4 text-slate-400 dark:text-slate-400">
                           {control.description}
                         </td>
 
@@ -812,12 +820,12 @@ export default function FrameworksPage() {
 
                           {control.status ===
                           "Mapped" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-medium text-emerald-700">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 text-[8px] font-medium text-emerald-700 dark:text-emerald-400">
                               <Check className="h-3 w-3" />
                               Mapped
                             </span>
                           ) : (
-                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[8px] font-medium text-slate-500">
+                            <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[8px] font-medium text-slate-500 dark:text-slate-400">
                               Unmapped
                             </span>
                           )}
@@ -833,8 +841,8 @@ export default function FrameworksPage() {
 
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                    <p className="mt-2 text-[11px] font-medium text-slate-600">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400" />
+                    <p className="mt-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                       Loading control catalog...
                     </p>
                   </div>
@@ -843,13 +851,13 @@ export default function FrameworksPage() {
                 ] ?? []).length === 0 ? (
                   <div className="px-5 py-12 text-center">
 
-                    <FileText className="mx-auto h-7 w-7 text-slate-300" />
+                    <FileText className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
 
-                    <p className="mt-2 text-[11px] font-medium text-slate-600">
+                    <p className="mt-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                       No controls in this library
                     </p>
 
-                    <p className="mt-1 text-[9px] text-slate-400">
+                    <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
                       Add the first control to begin building the library.
                     </p>
 
@@ -879,7 +887,7 @@ export default function FrameworksPage() {
           }}
         >
 
-          <div className="w-full max-w-[560px] rounded-xl bg-white shadow-2xl overflow-hidden">
+          <div className="w-full max-w-[560px] rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
 
             <ModalHeader
               title="Add Framework"
@@ -896,21 +904,21 @@ export default function FrameworksPage() {
             <div className="space-y-4 px-6 py-5 max-h-[75vh] overflow-y-auto">
 
               {formError && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-[11px] text-red-700">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                <div className="flex items-start gap-2.5 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-[11px] text-red-700 dark:text-red-300">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
                   <div className="flex-1">
-                    <p className="font-semibold text-red-900">Cannot create framework</p>
-                    <p className="mt-0.5 text-red-700 leading-relaxed">{formError}</p>
+                    <p className="font-semibold text-red-900 dark:text-red-200">Cannot create framework</p>
+                    <p className="mt-0.5 text-red-700 dark:text-red-300 leading-relaxed">{formError}</p>
                   </div>
                 </div>
               )}
 
               {submitting && (
-                <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/80 p-3.5 text-[11px] text-blue-900 shadow-xs">
-                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-600" />
+                <div className="flex items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/80 dark:bg-blue-950/40 p-3.5 text-[11px] text-blue-900 dark:text-blue-200 shadow-xs">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
                   <div>
-                    <p className="font-semibold text-blue-950">Provisioning Framework...</p>
-                    <p className="text-[10px] text-blue-700 mt-0.5">
+                    <p className="font-semibold text-blue-950 dark:text-blue-100">Provisioning Framework...</p>
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300 mt-0.5">
                       {includeBaselineControls && selectedPreset
                         ? `Registering ${newFramework.name || selectedPreset.name} and importing ${selectedPreset.controls.length} curated baseline controls...`
                         : "Writing framework records into workspace database..."}
@@ -948,7 +956,7 @@ export default function FrameworksPage() {
                       }
                     }
                   }}
-                  className={`${inputClass} font-medium text-slate-800 bg-slate-50 border-slate-300 focus:bg-white disabled:opacity-60`}
+                  className={`${inputClass} font-medium text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 disabled:opacity-60`}
                 >
                   <option value="">-- Choose from Pre-configured Standards Catalog --</option>
                   <option value="custom">⚙️ Custom / Blank Framework (Manual Entry)</option>
@@ -982,30 +990,30 @@ export default function FrameworksPage() {
               </FormField>
 
               {selectedPreset && (
-                <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50/80 to-indigo-50/50 p-3.5 text-[11px] text-blue-900 shadow-sm">
+                <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/30 p-3.5 text-[11px] text-blue-900 dark:text-blue-200 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="rounded bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                         {selectedPreset.shortName}
                       </span>
-                      <span className="font-semibold text-slate-800">{selectedPreset.name}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">{selectedPreset.name}</span>
                     </div>
-                    <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-semibold text-blue-800">
+                    <span className="rounded-full bg-blue-100 dark:bg-blue-900/60 px-2.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:text-blue-200">
                       {selectedPreset.controls.length} Baseline Controls
                     </span>
                   </div>
-                  <p className="mt-1.5 text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                  <p className="mt-1.5 text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                     {selectedPreset.description}
                   </p>
-                  <label className="mt-2.5 flex cursor-pointer items-center gap-2 border-t border-blue-100/80 pt-2">
+                  <label className="mt-2.5 flex cursor-pointer items-center gap-2 border-t border-blue-100/80 dark:border-blue-900/40 pt-2">
                     <input
                       type="checkbox"
                       disabled={submitting}
                       checked={includeBaselineControls}
                       onChange={(e) => setIncludeBaselineControls(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      className="h-3.5 w-3.5 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-[11px] font-medium text-blue-900">
+                    <span className="text-[11px] font-medium text-blue-900 dark:text-blue-200">
                       Automatically import {selectedPreset.controls.length} curated baseline controls into workspace
                     </span>
                   </label>
@@ -1159,7 +1167,7 @@ export default function FrameworksPage() {
             }}
           >
 
-            <div className="w-full max-w-[520px] rounded-xl bg-white shadow-2xl overflow-hidden">
+            <div className="w-full max-w-[520px] rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
 
               <ModalHeader
                 title="Add Control"
@@ -1176,11 +1184,11 @@ export default function FrameworksPage() {
               <div className="space-y-4 px-6 py-5 max-h-[75vh] overflow-y-auto">
 
                 {controlError && (
-                  <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-[11px] text-red-700">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div className="flex items-start gap-2.5 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-[11px] text-red-700 dark:text-red-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
                     <div className="flex-1">
-                      <p className="font-semibold text-red-900">Cannot create control</p>
-                      <p className="mt-0.5 text-red-700 leading-relaxed">{controlError}</p>
+                      <p className="font-semibold text-red-900 dark:text-red-200">Cannot create control</p>
+                      <p className="mt-0.5 text-red-700 dark:text-red-300 leading-relaxed">{controlError}</p>
                     </div>
                   </div>
                 )}
@@ -1316,13 +1324,13 @@ function FrameworkRow({
     framework.status === "Active";
 
   return (
-    <div className="px-5 py-5 transition hover:bg-slate-50/60">
+    <div className="px-5 py-5 transition hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
 
       <div className="flex items-center gap-5">
 
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-indigo-50">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/40">
           <BookOpenCheck
-            className="h-5 w-5 text-indigo-600"
+            className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
             strokeWidth={1.7}
           />
         </div>
@@ -1331,28 +1339,28 @@ function FrameworkRow({
 
           <div className="flex items-center gap-2">
 
-            <h3 className="text-[13px] font-semibold text-slate-800">
+            <h3 className="text-[13px] font-semibold text-slate-800 dark:text-white">
               {framework.name}
             </h3>
 
             {active ? (
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] font-medium text-emerald-700">
+              <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[8px] font-medium text-emerald-700 dark:text-emerald-400">
                 Active
               </span>
             ) : (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[8px] font-medium text-slate-500">
+              <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[8px] font-medium text-slate-500 dark:text-slate-400">
                 Available
               </span>
             )}
 
           </div>
 
-          <p className="mt-1 text-[9px] font-medium text-blue-600">
+          <p className="mt-1 text-[9px] font-medium text-blue-600 dark:text-blue-400">
             {framework.shortName} ·{" "}
             {framework.version}
           </p>
 
-          <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400">
+          <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400 dark:text-slate-400">
             {framework.description}
           </p>
 
@@ -1360,11 +1368,11 @@ function FrameworkRow({
 
         <div className="w-[135px] shrink-0">
 
-          <p className="mb-1 text-[9px] uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-[9px] uppercase tracking-wide text-slate-400 dark:text-slate-400">
             Category
           </p>
 
-          <span className="rounded bg-slate-100 px-2 py-1 text-[9px] font-medium text-slate-600">
+          <span className="rounded bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[9px] font-medium text-slate-600 dark:text-slate-300">
             {framework.category}
           </span>
 
@@ -1372,11 +1380,11 @@ function FrameworkRow({
 
         <div className="w-[120px] shrink-0">
 
-          <p className="mb-1 text-[9px] uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-[9px] uppercase tracking-wide text-slate-400 dark:text-slate-400">
             Controls
           </p>
 
-          <p className="text-[13px] font-semibold text-slate-800">
+          <p className="text-[13px] font-semibold text-slate-800 dark:text-white">
             {framework.controls}
           </p>
 
@@ -1386,17 +1394,17 @@ function FrameworkRow({
 
           <div className="mb-1 flex items-center justify-between">
 
-            <p className="text-[9px] uppercase tracking-wide text-slate-400">
+            <p className="text-[9px] uppercase tracking-wide text-slate-400 dark:text-slate-400">
               Mapped
             </p>
 
-            <span className="text-[9px] font-medium text-slate-500">
+            <span className="text-[9px] font-medium text-slate-500 dark:text-slate-400">
               {percentage}%
             </span>
 
           </div>
 
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
 
             <div
               className="h-full rounded-full bg-blue-600 transition-all"
@@ -1407,7 +1415,7 @@ function FrameworkRow({
 
           </div>
 
-          <p className="mt-1 text-[9px] text-slate-400">
+          <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-400">
             {framework.mapped} of{" "}
             {framework.controls}
           </p>
@@ -1416,11 +1424,11 @@ function FrameworkRow({
 
         <div className="w-[70px] shrink-0">
 
-          <p className="mb-1 text-[9px] uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-[9px] uppercase tracking-wide text-slate-400 dark:text-slate-400">
             Audits
           </p>
 
-          <p className="text-[13px] font-semibold text-slate-800">
+          <p className="text-[13px] font-semibold text-slate-800 dark:text-white">
             {framework.audits}
           </p>
 
@@ -1428,7 +1436,7 @@ function FrameworkRow({
 
         <div className="relative ml-auto flex shrink-0 items-center gap-2">
           {actionLoading ? (
-            <div className="flex h-8 items-center gap-1.5 rounded-md bg-blue-50 px-3 text-[11px] font-medium text-blue-600">
+            <div className="flex h-8 items-center gap-1.5 rounded-md bg-blue-50 dark:bg-blue-950/40 px-3 text-[11px] font-medium text-blue-600 dark:text-blue-400">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               <span>Saving...</span>
             </div>
@@ -1437,17 +1445,17 @@ function FrameworkRow({
               <button
                 type="button"
                 onClick={onMenu}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-blue-600"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>
 
               {menuOpen && (
-                <div className="absolute right-[92px] top-9 z-30 w-[155px] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl">
+                <div className="absolute right-[92px] top-9 z-30 w-[155px] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-800 dark:bg-slate-800">
                   <button
                     type="button"
                     onClick={onView}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     <BookOpenCheck className="h-3.5 w-3.5" />
                     View Library
@@ -1456,7 +1464,7 @@ function FrameworkRow({
                   <button
                     type="button"
                     onClick={onToggle}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-slate-600 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     {active ? (
                       <>
@@ -1474,7 +1482,7 @@ function FrameworkRow({
                   <button
                     type="button"
                     onClick={onDelete}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-red-600 hover:bg-red-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                   >
                     <X className="h-3.5 w-3.5" />
                     Delete
@@ -1485,7 +1493,7 @@ function FrameworkRow({
               <button
                 type="button"
                 onClick={onView}
-                className="flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                className="flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 View
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -1502,13 +1510,13 @@ function FrameworkRow({
 
 /* ============================================================
    SUMMARY CARD
-============================================================ */
+=========================================================== */
 
 function SummaryCard({
   icon,
   label,
   value,
-  valueClass = "text-slate-900",
+  valueClass = "text-slate-900 dark:text-white",
   loading = false,
 }: {
   icon: React.ReactNode;
@@ -1518,14 +1526,14 @@ function SummaryCard({
   loading?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
 
-      <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+      <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
         {icon}
       </div>
 
       {loading ? (
-        <div className="h-6 w-14 animate-pulse rounded bg-slate-200 my-0.5" />
+        <div className="h-6 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-800 my-0.5" />
       ) : (
         <p
           className={`text-[20px] font-semibold ${valueClass}`}
@@ -1534,7 +1542,7 @@ function SummaryCard({
         </p>
       )}
 
-      <p className="mt-1 text-[10px] text-slate-400">
+      <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-400">
         {label}
       </p>
 
@@ -1544,7 +1552,7 @@ function SummaryCard({
 
 /* ============================================================
    DETAIL STAT
-============================================================ */
+=========================================================== */
 
 function DetailStat({
   label,
@@ -1554,13 +1562,13 @@ function DetailStat({
   value: string;
 }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-4 py-3">
+    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
 
-      <p className="text-[9px] uppercase tracking-wide text-slate-400">
+      <p className="text-[9px] uppercase tracking-wide text-slate-400 dark:text-slate-400">
         {label}
       </p>
 
-      <p className="mt-1 text-[13px] font-semibold text-slate-800">
+      <p className="mt-1 text-[13px] font-semibold text-slate-800 dark:text-white">
         {value}
       </p>
 
@@ -1570,7 +1578,7 @@ function DetailStat({
 
 /* ============================================================
    FORM FIELD
-============================================================ */
+=========================================================== */
 
 function FormField({
   label,
@@ -1582,7 +1590,7 @@ function FormField({
   return (
     <div>
 
-      <label className="mb-1.5 block text-[10px] font-medium text-slate-600">
+      <label className="mb-1.5 block text-[10px] font-medium text-slate-600 dark:text-slate-300">
         {label}
       </label>
 
@@ -1594,7 +1602,7 @@ function FormField({
 
 /* ============================================================
    MODAL
-============================================================ */
+=========================================================== */
 
 function ModalOverlay({
   children,
@@ -1605,7 +1613,7 @@ function ModalOverlay({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/30 px-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs px-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -1629,14 +1637,14 @@ function ModalHeader({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+    <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4">
 
       <div>
-        <h2 className="text-[15px] font-semibold text-slate-800">
+        <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
           {title}
         </h2>
 
-        <p className="mt-1 text-[10px] text-slate-400">
+        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-400">
           {subtitle}
         </p>
       </div>
@@ -1645,7 +1653,7 @@ function ModalHeader({
         type="button"
         disabled={disabled}
         onClick={onClose}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <X className="h-4 w-4" />
       </button>
@@ -1670,13 +1678,13 @@ function ModalFooter({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex justify-end items-center gap-2 border-t border-slate-100 px-6 py-4 bg-slate-50/50">
+    <div className="flex justify-end items-center gap-2 border-t border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-900/50">
 
       <button
         type="button"
         disabled={loading || disabled}
         onClick={onCancel}
-        className="h-9 rounded-md border border-slate-200 bg-white px-4 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
         Cancel
       </button>
@@ -1696,5 +1704,5 @@ function ModalFooter({
 }
 
 const inputClass =
-  "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
+  "h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-[11px] text-slate-700 dark:text-slate-100 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-blue-400 focus:ring-1 focus:ring-blue-100 dark:focus:ring-blue-900/40";
 export const dynamic = 'force-dynamic';

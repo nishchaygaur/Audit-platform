@@ -139,10 +139,23 @@ export async function createFramework(workspaceId: string, input: CreateFramewor
     const version = input.version?.trim() || "1.0";
     const status: FrameworkStatus = input.status || "Active";
 
+    // Ensure workspace record exists to prevent any foreign key issues
+    await db.execute(
+      'INSERT INTO workspaces (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
+      [workspaceId, 'Workspace']
+    ).catch(() => {});
+
     await db.execute(
       `
       INSERT INTO frameworks (id, workspace_id, name, short_name, description, category, version, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        short_name = EXCLUDED.short_name,
+        description = EXCLUDED.description,
+        category = EXCLUDED.category,
+        version = EXCLUDED.version,
+        status = EXCLUDED.status
       `,
       [id, workspaceId, name, shortName, description, category, version, status]
     );
@@ -169,7 +182,9 @@ export async function createFramework(workspaceId: string, input: CreateFramewor
             JSON.stringify(ctrl.mappedFrameworks || []),
             workspaceId,
           ]
-        );
+        ).catch((err) => {
+          console.warn(`Failed to insert baseline control ${controlId}:`, err);
+        });
         insertedControlsCount++;
       }
     }

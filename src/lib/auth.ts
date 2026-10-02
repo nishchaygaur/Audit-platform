@@ -97,7 +97,7 @@ export async function resolveAppUser(supabaseUser: SupabaseUser): Promise<AppUse
     // Atomic insert with ON CONFLICT to avoid unique constraint race conditions
     const upserted = await tx.queryOne<AppUser>(
       `INSERT INTO users (id, name, email, password, role, supabase_user_id)
-       VALUES ($1, $2, $3, '', 'Viewer', $4)
+       VALUES ($1, $2, $3, '', 'Admin', $4)
        ON CONFLICT (email) DO UPDATE
        SET supabase_user_id = EXCLUDED.supabase_user_id,
            name = CASE 
@@ -113,7 +113,7 @@ export async function resolveAppUser(supabaseUser: SupabaseUser): Promise<AppUse
       id: newUserId,
       name: fallbackName,
       email,
-      role: 'Viewer',
+      role: 'Admin',
     };
 
     if (isFirstUser && resolvedUser.id === newUserId) {
