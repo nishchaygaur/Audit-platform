@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 
 import { useWorkspace } from "@/context/WorkspaceContext";
+import ThemeSwitcher from "@/components/common/ThemeSwitcher";
 
 interface NavItem {
   name: string;
@@ -572,18 +573,22 @@ export default function Sidebar() {  const { user } = useAuth();
                 <Link
                   href="/settings"
                   onClick={() => setUserMenuOpen(false)}
-                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[12px] text-slate-700 transition hover:bg-slate-100"
+                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[12px] text-slate-700 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   <Settings className="h-3.5 w-3.5 text-slate-500" />
                   Account Settings
                 </Link>
               </div>
 
-              <div className="border-t border-slate-100 pt-1">
+              <div className="border-t border-slate-100 dark:border-slate-800 p-1">
+                <ThemeSwitcher variant="menu-item" />
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-1">
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[12px] font-medium text-rose-600 transition hover:bg-rose-50"
+                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[12px] font-medium text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 >
                   <LogOut className="h-3.5 w-3.5 text-rose-500" />
                   Sign Out

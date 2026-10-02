@@ -11,11 +11,19 @@ import {
   Shield,
   User,
   X,
+  Palette,
+  Sun,
+  Moon,
+  Monitor,
+  Check,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useTheme } from "@/context/ThemeContext";
+import ThemeSwitcher from "@/components/common/ThemeSwitcher";
 
 type SettingsTab =
   | "General"
+  | "Appearance"
   | "Security"
   | "Notifications"
   | "Audit Configuration";
@@ -215,6 +223,13 @@ export default function SettingsPage() {
             />
 
             <SettingsNav
+              active={activeTab === "Appearance"}
+              icon={<Palette size={16} />}
+              label="Appearance"
+              onClick={() => setActiveTab("Appearance")}
+            />
+
+            <SettingsNav
               active={activeTab === "Security"}
               icon={<Shield size={16} />}
               label="Security"
@@ -245,6 +260,10 @@ export default function SettingsPage() {
                 settings={settings}
                 updateSetting={updateSetting}
               />
+            )}
+
+            {activeTab === "Appearance" && (
+              <AppearanceSettings />
             )}
 
             {activeTab === "Security" && (
@@ -718,10 +737,137 @@ function FormField({
 
 function InfoBox({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-6 mb-6 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-      <p className="text-[10px] leading-4 text-blue-600">
+    <div className="mx-6 mb-6 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/30">
+      <p className="text-[10px] leading-4 text-blue-600 dark:text-blue-400">
         {children}
       </p>
+    </div>
+  );
+}
+
+function AppearanceSettings() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+        <h2 className="text-[17px] font-semibold text-slate-900 dark:text-white">
+          Appearance & Theme
+        </h2>
+        <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
+          Customize the visual presentation of your cybersecurity audit workspace.
+        </p>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Interface Theme
+          </label>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">
+            Select your preferred color scheme. Dark theme is the default for high contrast security and audit monitoring.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-xl">
+            {/* Dark Theme Card */}
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`rounded-xl border p-4 text-left transition-all ${
+                theme === "dark"
+                  ? "border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="h-20 rounded-lg bg-slate-950 border border-slate-800 p-2 flex flex-col justify-between mb-3 shadow-inner">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-red-500/80" />
+                  <div className="h-2 w-2 rounded-full bg-amber-500/80" />
+                  <div className="h-2 w-2 rounded-full bg-emerald-500/80" />
+                </div>
+                <div className="space-y-1">
+                  <div className="h-2 w-12 rounded bg-slate-800" />
+                  <div className="h-2 w-20 rounded bg-blue-600/70" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                  <Moon size={15} className="text-blue-400" />
+                  Dark (Default)
+                </span>
+                {theme === "dark" && <Check size={16} className="text-blue-600" />}
+              </div>
+            </button>
+
+            {/* Light Theme Card */}
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`rounded-xl border p-4 text-left transition-all ${
+                theme === "light"
+                  ? "border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="h-20 rounded-lg bg-slate-100 border border-slate-300 p-2 flex flex-col justify-between mb-3 shadow-inner">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-red-400" />
+                  <div className="h-2 w-2 rounded-full bg-amber-400" />
+                  <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                </div>
+                <div className="space-y-1">
+                  <div className="h-2 w-12 rounded bg-slate-300" />
+                  <div className="h-2 w-20 rounded bg-blue-500" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sun size={15} className="text-amber-500" />
+                  Light
+                </span>
+                {theme === "light" && <Check size={16} className="text-blue-600" />}
+              </div>
+            </button>
+
+            {/* System Theme Card */}
+            <button
+              type="button"
+              onClick={() => setTheme("system")}
+              className={`rounded-xl border p-4 text-left transition-all ${
+                theme === "system"
+                  ? "border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="h-20 rounded-lg bg-linear-to-r from-slate-950 via-slate-800 to-slate-200 border border-slate-700 p-2 flex flex-col justify-between mb-3 shadow-inner">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-red-500/80" />
+                  <div className="h-2 w-2 rounded-full bg-amber-500/80" />
+                  <div className="h-2 w-2 rounded-full bg-emerald-500/80" />
+                </div>
+                <div className="space-y-1">
+                  <div className="h-2 w-12 rounded bg-slate-700" />
+                  <div className="h-2 w-20 rounded bg-slate-400" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                  <Monitor size={15} className="text-slate-400" />
+                  System Sync
+                </span>
+                {theme === "system" && <Check size={16} className="text-blue-600" />}
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-2">
+            Quick Toggle
+          </label>
+          <ThemeSwitcher variant="segmented" />
+        </div>
+      </div>
     </div>
   );
 }

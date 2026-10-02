@@ -31,6 +31,7 @@ import { signOut } from "@/actions/auth";
 import { globalSearch, type SearchResultItem } from "@/actions/search";
 import { getAuditTrail, type AuditTrailRecord } from "@/actions/audit-trail";
 import { hasPermission } from "@/lib/rbac";
+import ThemeSwitcher from "@/components/common/ThemeSwitcher";
 
 export default function Header() {
   const { currentWorkspace } = useWorkspace();
@@ -275,6 +276,9 @@ export default function Header() {
             )}
           </div>
 
+          {/* THEME SWITCHER */}
+          <ThemeSwitcher variant="button" />
+
           {/* HELP BUTTON */}
           <button
             type="button"
@@ -282,7 +286,7 @@ export default function Header() {
             data-testid="header-help-button"
             aria-label="Help"
             onClick={() => setHelpOpen(true)}
-            className="text-slate-600 transition hover:text-blue-600 focus:outline-hidden"
+            className="text-slate-600 transition hover:text-blue-600 focus:outline-hidden dark:text-slate-400 dark:hover:text-blue-400"
           >
             <CircleHelp className="h-5 w-5" strokeWidth={1.8} />
           </button>
@@ -296,16 +300,16 @@ export default function Header() {
               aria-expanded={userMenuOpen}
               aria-haspopup="true"
               onClick={() => setUserMenuOpen((open) => !open)}
-              className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-slate-100 focus:outline-hidden"
+              className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-slate-100 focus:outline-hidden dark:hover:bg-slate-800"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-[13px] font-semibold text-violet-700">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-[13px] font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">
                 {userInitials}
               </span>
               <div className="hidden text-left sm:block">
-                <p className="text-[13px] font-semibold text-slate-800 leading-tight">
+                <p className="text-[13px] font-semibold text-slate-800 leading-tight dark:text-slate-100">
                   {userName}
                 </p>
-                <span className="text-[11px] font-medium text-indigo-600">
+                <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
                   {userRole}
                 </span>
               </div>
@@ -321,17 +325,17 @@ export default function Header() {
               <div
                 id="header-user-menu"
                 data-testid="user-dropdown-menu"
-                className="absolute right-0 top-12 z-50 w-64 rounded-xl border border-slate-200 bg-white p-1 text-slate-800 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100"
+                className="absolute right-0 top-12 z-50 w-64 rounded-xl border border-slate-200 bg-white p-1 text-slate-800 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               >
-                <div className="border-b border-slate-100 px-3.5 py-3 bg-slate-50/70 rounded-t-lg">
-                  <p className="text-[13px] font-semibold text-slate-900 leading-tight">
+                <div className="border-b border-slate-100 px-3.5 py-3 bg-slate-50/70 rounded-t-lg dark:border-slate-800 dark:bg-slate-800/60">
+                  <p className="text-[13px] font-semibold text-slate-900 leading-tight dark:text-white">
                     {userName}
                   </p>
-                  <p className="truncate text-[11px] text-slate-500 mt-0.5">
+                  <p className="truncate text-[11px] text-slate-500 mt-0.5 dark:text-slate-400">
                     {userEmail}
                   </p>
                   <div className="mt-2 flex items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                       {userRole}
                     </span>
                     <span className="text-[10px] text-slate-400">
@@ -344,7 +348,7 @@ export default function Header() {
                   <Link
                     href="/workspaces"
                     onClick={() => setUserMenuOpen(false)}
-                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100"
+                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     <Building2 className="h-4 w-4 text-slate-400" />
                     Switch Workspace
@@ -354,7 +358,7 @@ export default function Header() {
                     <Link
                       href="/administration"
                       onClick={() => setUserMenuOpen(false)}
-                      className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100"
+                      className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                     >
                       <UsersRound className="h-4 w-4 text-slate-400" />
                       Team & Permissions
@@ -365,28 +369,32 @@ export default function Header() {
                     href="/docs"
                     id="header-user-docs-link"
                     onClick={() => setUserMenuOpen(false)}
-                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100"
+                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
-                    <BookOpen className="h-4 w-4 text-blue-600" />
+                    <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     Documentation
                   </Link>
 
                   <Link
                     href="/settings"
                     onClick={() => setUserMenuOpen(false)}
-                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100"
+                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] text-slate-700 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     <Sliders className="h-4 w-4 text-slate-400" />
                     Settings
                   </Link>
                 </div>
 
-                <div className="border-t border-slate-100 pt-1">
+                <div className="border-t border-slate-100 dark:border-slate-800 p-1">
+                  <ThemeSwitcher variant="menu-item" />
+                </div>
+
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-1">
                   <button
                     type="button"
                     data-testid="sign-out-button"
                     onClick={handleLogout}
-                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] font-medium text-rose-600 transition hover:bg-rose-50"
+                    className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-[12.5px] font-medium text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-950/30"
                   >
                     <LogOut className="h-4 w-4 text-rose-500" />
                     Sign Out
