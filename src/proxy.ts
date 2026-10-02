@@ -36,6 +36,7 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublicRoute =
     pathname === '/signin' ||
+    pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/docs');

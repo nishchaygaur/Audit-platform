@@ -2,6 +2,7 @@
 import { FormEvent, useState, useEffect } from "react";
 import { ShieldCheck, Eye, EyeOff, Lock, Mail, User, X, CheckCircle2, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { signIn, requestPasswordReset } from "@/actions/auth";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -458,21 +459,30 @@ export default function SignInPage() {
                   </p>
                 )}
 
-                <div className="flex justify-end gap-2.5 pt-2">
-                  <button
-                    type="button"
+                <div className="flex items-center justify-between pt-2">
+                  <Link
+                    href="/forgot-password"
                     onClick={() => setShowForgotModal(false)}
-                    className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    className="text-[11px] text-slate-500 hover:text-blue-600 transition"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={resetLoading}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {resetLoading ? "Sending Link..." : "Send Reset Link"}
-                  </button>
+                    Open full page →
+                  </Link>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {resetLoading ? "Sending Link..." : "Send Reset Link"}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}

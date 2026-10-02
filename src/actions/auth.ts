@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { resolveAppUser } from '@/lib/auth';
+import db from '@/lib/db';
+import bcrypt from 'bcryptjs';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 
@@ -175,14 +177,14 @@ export async function requestPasswordReset(email: string) {
   }
 }
 
-export async function updatePassword(newPassword: string) {
+export async function updatePassword(newPassword: string): Promise<AuthActionResult> {
   if (!newPassword || newPassword.length < 8) {
     return { error: 'Password must be at least 8 characters long.' };
   }
 
   try {
     const supabase = await createClient();
-    const { error } = await supabase.auth.updateUser({
+    const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
     });
 
@@ -190,11 +192,56 @@ export async function updatePassword(newPassword: string) {
       return { error: error.message };
     }
 
+    // Sync with PostgreSQL users table if user is available
+    if (data?.user?.email) {
+      try {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await db.execute(
+          'UPDATE users SET password = $1 WHERE LOWER(email) = LOWER($2) OR supabase_user_id = $3',
+          [hashedPassword, data.user.email, data.user.id]
+        );
+      } catch (dbErr) {
+        console.warn('[Auth] Failed to sync local password hash:', dbErr);
+      }
+    }
+
     // Sign out the recovery session so the user signs in fresh
-    await supabase.auth.signOut();
+    await supabase.auth.signOut().catch(() => {});
     return { success: true };
   } catch (err) {
     console.error('[Auth] Error updating password:', err);
     return { error: 'Failed to update password. Please try requesting a new reset link.' };
+  }
+}
+
+export async function syncLocalPassword(newPassword: string): Promise<AuthActionResult> {
+  if (!newPassword || newPassword.length < 8) {
+    return { error: 'Password must be at least 8 characters long.' };
+  }
+
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      return { error: 'No active authentication session found.' };
+    }
+
+    if (user.email) {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await db.execute(
+        'UPDATE users SET password = $1 WHERE LOWER(email) = LOWER($2) OR supabase_user_id = $3',
+        [hashedPassword, user.email, user.id]
+      );
+    }
+
+    await supabase.auth.signOut().catch(() => {});
+    return { success: true };
+  } catch (err) {
+    console.error('[Auth] Error syncing local password:', err);
+    return { error: 'Failed to synchronize password with local account.' };
   }
 }

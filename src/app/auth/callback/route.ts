@@ -26,11 +26,11 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get('token_hash');
   const type = searchParams.get('type') as EmailOtpType | null;
   const next = searchParams.get('next');
-
-  // Supabase error parameters passed in query string (e.g. ?error=access_denied&error_code=otp_expired)
   const errorParam = searchParams.get('error');
   const errorCode = searchParams.get('error_code');
   const errorDescription = searchParams.get('error_description');
+
+  const isRecovery = type === 'recovery' || next === '/reset-password';
 
   if (errorParam || errorCode) {
     console.error('[Auth Callback] Supabase error encountered:', {
@@ -39,10 +39,11 @@ export async function GET(request: NextRequest) {
       errorDescription,
     });
     const mappedError = errorCode || errorParam || 'auth_callback_failed';
+    const targetPath = isRecovery ? '/reset-password' : '/signin';
     return NextResponse.redirect(
       getRedirectUrl(
         request,
-        `/signin?error=${encodeURIComponent(mappedError)}${
+        `${targetPath}?error=${encodeURIComponent(mappedError)}${
           errorDescription ? `&error_description=${encodeURIComponent(errorDescription)}` : ''
         }`
       )
@@ -82,7 +83,8 @@ export async function GET(request: NextRequest) {
         ? 'pkce_verifier_missing'
         : 'auth_callback_failed';
       const descParam = error?.message ? `&error_description=${encodeURIComponent(error.message)}` : '';
-      return NextResponse.redirect(getRedirectUrl(request, `/signin?error=${errCode}${descParam}`));
+      const targetPath = safeNext === '/reset-password' || type === 'recovery' ? '/reset-password' : '/signin';
+      return NextResponse.redirect(getRedirectUrl(request, `${targetPath}?error=${errCode}${descParam}`));
     }
 
     try {
@@ -110,7 +112,8 @@ export async function GET(request: NextRequest) {
       const isExpired = error?.message?.toLowerCase().includes('expired') || false;
       const errCode = isExpired ? 'otp_expired' : 'auth_callback_failed';
       const descParam = error?.message ? `&error_description=${encodeURIComponent(error.message)}` : '';
-      return NextResponse.redirect(getRedirectUrl(request, `/signin?error=${errCode}${descParam}`));
+      const targetPath = safeNext === '/reset-password' || type === 'recovery' ? '/reset-password' : '/signin';
+      return NextResponse.redirect(getRedirectUrl(request, `${targetPath}?error=${errCode}${descParam}`));
     }
 
     try {
