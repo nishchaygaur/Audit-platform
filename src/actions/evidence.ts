@@ -829,6 +829,21 @@ export async function analyzeEvidenceWithAI(
       [record.control, `%${record.control}%`]
     );
 
+    // Retrieve persistent binary object from storage if available
+    let fileBuffer: Buffer | undefined;
+    let fileMimeType: string | undefined = record.mime_type;
+    if (record.storage_key) {
+      try {
+        const obj = await storage.getObject(record.storage_key);
+        if (obj?.body) {
+          fileBuffer = obj.body;
+          fileMimeType = obj.contentType || fileMimeType;
+        }
+      } catch (storageErr) {
+        console.warn("[Evidence AI] Could not fetch storage file buffer for AI scan:", storageErr);
+      }
+    }
+
     const analysis = await analyzeEvidenceArtifact({
       name: record.name,
       type: record.type,
@@ -838,6 +853,8 @@ export async function analyzeEvidenceWithAI(
       controlTitle: controlInfo?.title || record.control,
       controlRequirement: controlInfo?.description,
       framework: record.framework || "ISO 27001",
+      buffer: fileBuffer,
+      mimeType: fileMimeType,
     });
 
     const analysisJson = JSON.stringify(analysis);

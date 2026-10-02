@@ -1595,13 +1595,15 @@ function EvidencePanel({ audit }: { audit: Audit }) {
                   type="button"
                   onClick={() => setAiModalEvidence(item)}
                   className={`flex h-7 items-center gap-1 rounded border px-2 text-[10px] font-medium transition ${
-                    item.ai_status === "valid"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                      : item.ai_status === "gap_detected"
-                      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                      : item.ai_status === "invalid"
-                      ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-                      : "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
+                    item.ai_status === "Compliant" || item.ai_status === "valid"
+                      ? "border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100"
+                      : item.ai_status === "Partially Compliant" || item.ai_status === "gap_detected"
+                      ? "border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
+                      : item.ai_status === "Invalid Evidence" || item.ai_status === "invalid"
+                      ? "border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100"
+                      : item.ai_status === "Deficient"
+                      ? "border-orange-200 dark:border-orange-800/60 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 hover:bg-orange-100"
+                      : "border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100"
                   }`}
                   title="Run or view Gemini AI Evidence Pre-Scan"
                 >

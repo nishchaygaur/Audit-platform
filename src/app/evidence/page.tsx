@@ -1111,21 +1111,32 @@ function EvidenceRow({
       </td>
 
       <td className="px-3 py-4">
-        {item.ai_confidence ? (
+        {typeof item.ai_confidence === "number" || item.ai_status ? (
           <button
             type="button"
             onClick={() => onOpenAiScan(item)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50/90 px-2.5 py-1 text-[10px] font-semibold text-purple-700 hover:bg-purple-100 transition shadow-2xs"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition shadow-2xs ${
+              item.ai_status === "Invalid Evidence"
+                ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:border-rose-800/60 dark:text-rose-300"
+                : item.ai_status === "Deficient"
+                ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800/60 dark:text-amber-300"
+                : item.ai_status === "Compliant"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300"
+                : "border-purple-200 bg-purple-50/90 text-purple-700 hover:bg-purple-100 dark:bg-purple-950/40 dark:border-purple-800/60 dark:text-purple-300"
+            }`}
             title="Click to view Gemini AI audit review"
           >
-            <Sparkles className="h-3 w-3 text-purple-600" />
-            <span>{item.ai_confidence}% {item.ai_status || "Evaluated"}</span>
+            <Sparkles className="h-3 w-3" />
+            <span>
+              {item.ai_confidence !== undefined ? `${item.ai_confidence}% ` : ""}
+              {item.ai_status || "Evaluated"}
+            </span>
           </button>
         ) : (
           <button
             type="button"
             onClick={() => onOpenAiScan(item)}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50/40 transition shadow-2xs"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-medium text-slate-600 dark:text-slate-300 hover:border-purple-300 dark:hover:border-purple-600 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50/40 dark:hover:bg-purple-950/30 transition shadow-2xs"
             title="Run Gemini 3.8 Flash automated pre-scan"
           >
             <Sparkles className="h-3 w-3 text-purple-500" />
